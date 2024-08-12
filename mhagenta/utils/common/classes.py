@@ -153,6 +153,12 @@ class State:
         self._custom_fields.update(kwargs.keys())
         self.__dict__.update(kwargs)
 
+    def __str__(self) -> str:
+        return str(self.dump())
+
+    def __repr__(self) -> str:
+        return str(self.dump())
+
 
 class Belief(BaseModel):
     predicate: str
