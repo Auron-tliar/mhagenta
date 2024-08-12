@@ -1,4 +1,4 @@
-from .perceptor import Perceptor, PerceptorBase
+from .perceptor import Perceptor, PerceptorBase, PerceptorOutbox
 
 
-__all__ = ['Perceptor', 'PerceptorBase']
+__all__ = ['Perceptor', 'PerceptorBase', 'PerceptorOutbox']
