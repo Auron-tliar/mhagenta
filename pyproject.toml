@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "mhagenta"
+version = "0.2.0"
+description = "MHAgentA allows you to design and run simulations with Modular Hybrid Agents."
+authors = ["Dmitry Gnatyshak <dmitry.gnatyshak@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pydantic = "^2.7.1"
+docker = "^7.0.0"
+pika = "^1.3.2"
+jupyter = "^1.0.0"
+deflate = "^0.6.0"
+pika-stubs = "^0.1.3"
+dill = "^0.3.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

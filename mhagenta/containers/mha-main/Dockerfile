@@ -1,0 +1,14 @@
+ARG SRC_IMAGE="hagent-base"
+ARG SRC_VERSION="latest"
+FROM ${SRC_IMAGE}:${SRC_VERSION}
+LABEL authors="Dmitry Gnatyshak"
+
+COPY src /agent/
+RUN mkdir -p /out/logs
+RUN mkdir -p /out/save
+
+RUN rabbitmq-server -detached
+RUN sleep 5
+
+ENTRYPOINT ["sh"]
+CMD ["/agent/start.sh"]
