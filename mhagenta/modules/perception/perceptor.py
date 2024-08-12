@@ -5,8 +5,11 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class PerceptorOutbox(Outbox):
-    def send_observation(self, ll_reasoner_id: str, observation: Observation) -> None:
-        self._add(ll_reasoner_id, ConnType.send, observation.model_dump())
+    def send_observation(self, ll_reasoner_id: str, observation: Observation, **kwargs) -> None:
+        body = {'observation': observation}
+        if kwargs:
+            body.update(kwargs)
+        self._add(ll_reasoner_id, ConnType.send, body)
 
 
 class PerceptorBase(ModuleBase):
