@@ -5,8 +5,11 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class ActuatorOutbox(Outbox):
-    def send_status(self, ll_reasoner_id: str, status: ActionStatus) -> None:
-        self._add(ll_reasoner_id, ConnType.send, status.model_dump())
+    def send_status(self, ll_reasoner_id: str, status: ActionStatus, **kwargs) -> None:
+        body = {'action_status': status}
+        if kwargs:
+            body.update(kwargs)
+        self._add(ll_reasoner_id, ConnType.send, body)
 
 
 class ActuatorBase(ModuleBase):
