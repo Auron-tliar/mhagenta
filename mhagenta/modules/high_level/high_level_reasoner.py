@@ -6,8 +6,8 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class HLOutbox(Outbox):
-    def request_beliefs(self, receiver: str, **kwargs) -> None:
-        self._add(receiver, ConnType.request, kwargs)
+    def request_beliefs(self, knowledge_id: str, **kwargs) -> None:
+        self._add(knowledge_id, ConnType.request, kwargs)
 
     def request_memories(self, memory_id: str, **kwargs) -> None:
         self._add(memory_id, ConnType.request, kwargs)

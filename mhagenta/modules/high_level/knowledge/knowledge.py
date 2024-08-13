@@ -12,11 +12,11 @@ class KnowledgeOutbox(Outbox):
             body.update(kwargs)
         self._add(memory_id, ConnType.send, body)
 
-    def send_beliefs(self, receiver: str, beliefs: Iterable[Belief], **kwargs) -> None:
+    def send_beliefs(self, knowledge_id: str, beliefs: Iterable[Belief], **kwargs) -> None:
         body = {'beliefs': beliefs}
         if kwargs:
             body.update(kwargs)
-        self._add(receiver, ConnType.send, body)
+        self._add(knowledge_id, ConnType.send, body)
 
 
 class KnowledgeBase(ModuleBase):
