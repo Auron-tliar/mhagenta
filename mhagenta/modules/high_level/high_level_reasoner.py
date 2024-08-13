@@ -12,6 +12,9 @@ class HLOutbox(Outbox):
     def request_memories(self, memory_id: str, **kwargs) -> None:
         self._add(memory_id, ConnType.request, kwargs)
 
+    def request_action(self, actuator_id: str, **kwargs) -> None:
+        self._add(actuator_id, ConnType.request, kwargs)
+
     def send_beliefs(self, knowledge_id: str, beliefs: Iterable[Belief], **kwargs) -> None:
         body = {'beliefs': beliefs}
         if kwargs:
