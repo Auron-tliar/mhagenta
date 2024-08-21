@@ -207,12 +207,12 @@ class MHAProcess(MHABase, ABC):
 
         def __eq__(self, other):
             if not isinstance(other, self.__class__):
-                raise NotImplemented('Status object can only be compared with another Status object!')
+                raise NotImplemented('Stage object can only be compared with another Status object!')
             return self.value == other.value
 
         def __lt__(self, other):
             if not isinstance(other, self.__class__):
-                raise NotImplemented('Status object can only be compared with another Status object!')
+                raise NotImplemented('Stage object can only be compared with another Status object!')
             return self.value < other.value
 
     def __init__(self,

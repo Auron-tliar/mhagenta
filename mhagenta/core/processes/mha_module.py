@@ -155,6 +155,7 @@ class MHAModule(MHAProcess):
         )
 
     async def on_stop(self) -> None:
+        self.info('Stopping')
         self.save_state()
         self._queue.clear()
         self._report_status()
@@ -165,6 +166,7 @@ class MHAModule(MHAProcess):
             return
         match cmd.cmd:
             case cmd.START:
+                self.info(f'Received {cmd.START} command (start ts: {cmd.args["start_ts"] if "start_ts" in cmd.args else "-"})')
                 self._time.set_exec_start_ts(cmd.args['start_ts'] if 'start_ts' in cmd.args else self._time.agent)
                 self._stop_time = cmd.args['start_ts'] + self._exec_duration
                 # self._stage = self.Stage.starting
@@ -175,6 +177,7 @@ class MHAModule(MHAProcess):
                     periodic=False
                 )
             case cmd.STOP:
+                self.info(f'Received {cmd.STOP} command (reason: {cmd.args["reason"]})')
                 self._stage = self.Stage.stopping
                 self._stop_reason = cmd.args['reason']
             case _:

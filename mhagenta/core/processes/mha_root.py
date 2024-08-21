@@ -114,6 +114,8 @@ class MHARoot(MHAProcess):
 
         self._start_delay = start_delay
 
+        self._stop_sent = False
+
         if connector_kwargs is None:
             connector_kwargs = {}
 
@@ -269,14 +271,20 @@ class MHARoot(MHAProcess):
         )
 
     def stop_exec(self, reason: str = 'AGENT TIMEOUT CMD') -> None:
+        if self._stop_sent:
+            return
+        self.info(f'Sending {AgentCmd.STOP} command (reason {reason})')
         self.cmd(AgentCmd(
             agent_id=self._agent_id,
             cmd=AgentCmd.STOP,
             args={'reason': reason}
         ))
-        self.stop(reason=reason)
+        self._stop_sent = True
+        if self._stage < self.Stage.stopping:
+            self.stop(reason=reason)
 
     async def on_stop(self) -> None:
+        self.stop_exec()
         self.debug('Waiting for module execution to stop...')
         await self.wait_for_module_stop()
         self.debug('Waiting for module processes to terminate...')
