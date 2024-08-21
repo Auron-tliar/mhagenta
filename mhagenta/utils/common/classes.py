@@ -121,11 +121,75 @@ class AgentTime:
         return self.system, self.agent, self.module, self.exec
 
 
+class Directory:
+    def __init__(self,
+                 perception: Iterable[str] | str,
+                 actuation: Iterable[str] | str,
+                 ll_reasoning: Iterable[str] | str,
+                 learning: Iterable[str] | str | None = None,
+                 knowledge: Iterable[str] | str | None = None,
+                 hl_reasoning: Iterable[str] | str | None = None,
+                 goals: Iterable[str] | str | None = None,
+                 memory: Iterable[str] | str | None = None
+                 ) -> None:
+        self._perception = self._process_modules(perception)
+        self._actuation = self._process_modules(actuation)
+        self._ll_reasoning = self._process_modules(ll_reasoning)
+        self._learning = self._process_modules(learning)
+        self._knowledge = self._process_modules(knowledge)
+        self._hl_reasoning = self._process_modules(hl_reasoning)
+        self._goals = self._process_modules(goals)
+        self._memory = self._process_modules(memory)
+
+    @property
+    def perception(self) -> list[str]:
+        return self._perception
+
+    @property
+    def actuation(self) -> list[str]:
+        return self._actuation
+
+    @property
+    def ll_reasoning(self) -> list[str]:
+        return self._ll_reasoning
+
+    @property
+    def learning(self) -> list[str]:
+        return self._learning
+
+    @property
+    def knowledge(self) -> list[str]:
+        return self._knowledge
+
+    @property
+    def hl_reasoning(self) -> list[str]:
+        return self._hl_reasoning
+
+    @property
+    def goals(self) -> list[str]:
+        return self._goals
+
+    @property
+    def memory(self) -> list[str]:
+        return self._memory
+
+    @staticmethod
+    def _process_modules(module_ids: Iterable[str] | str | None) -> list[str]:
+        if isinstance(module_ids, Iterable):
+            modules = list(module_ids)
+        elif isinstance(module_ids, str):
+            modules = [module_ids]
+        else:
+            modules = []
+        return modules
+
+
 class State:
-    def __init__(self, agent_id: str, module_id: str, time_func: Callable[[], float], **kwargs) -> None:
+    def __init__(self, agent_id: str, module_id: str, time_func: Callable[[], float], directory: Directory, **kwargs) -> None:
         self._agent_id = agent_id
         self._module_id = module_id
         self._time_func = time_func
+        self._directory = directory
 
         self._custom_fields = set(kwargs.keys())
         self.__dict__.update(kwargs)
@@ -143,8 +207,8 @@ class State:
         return self._time_func()
 
     @property
-    def modules(self) -> dict[str, list[str]]:
-        raise NotImplementedError
+    def directory(self) -> Directory:
+        return self._directory
 
     def dump(self) -> dict[str, Any]:
         return {field: self.__dict__[field] for field in self._custom_fields}
@@ -341,66 +405,3 @@ class ModuleTypes:
     HLREASONER = 'HLReasoner'
     GOALGRAPH = 'GoalGraph'
     MEMORY = 'Memory'
-
-
-class Directory:
-    def __init__(self,
-                 perception: Iterable[str] | str,
-                 actuation: Iterable[str] | str,
-                 ll_reasoning: Iterable[str] | str,
-                 learning: Iterable[str] | str | None = None,
-                 knowledge: Iterable[str] | str | None = None,
-                 hl_reasoning: Iterable[str] | str | None = None,
-                 goals: Iterable[str] | str | None = None,
-                 memory: Iterable[str] | str | None = None
-                 ) -> None:
-        self._perception = self._process_modules(perception)
-        self._actuation = self._process_modules(actuation)
-        self._ll_reasoning = self._process_modules(ll_reasoning)
-        self._learning = self._process_modules(learning)
-        self._knowledge = self._process_modules(knowledge)
-        self._hl_reasoning = self._process_modules(hl_reasoning)
-        self._goals = self._process_modules(goals)
-        self._memory = self._process_modules(memory)
-
-    @property
-    def perception(self) -> list[str]:
-        return self._perception
-
-    @property
-    def actuation(self) -> list[str]:
-        return self._actuation
-
-    @property
-    def ll_reasoning(self) -> list[str]:
-        return self._ll_reasoning
-
-    @property
-    def learning(self) -> list[str]:
-        return self._learning
-
-    @property
-    def knowledge(self) -> list[str]:
-        return self._knowledge
-
-    @property
-    def hl_reasoning(self) -> list[str]:
-        return self._hl_reasoning
-
-    @property
-    def goals(self) -> list[str]:
-        return self._goals
-
-    @property
-    def memory(self) -> list[str]:
-        return self._memory
-
-    @staticmethod
-    def _process_modules(module_ids: Iterable[str] | str | None) -> list[str]:
-        if isinstance(module_ids, Iterable):
-            modules = list(module_ids)
-        elif isinstance(module_ids, str):
-            modules = [module_ids]
-        else:
-            modules = []
-        return modules

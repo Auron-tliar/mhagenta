@@ -34,7 +34,7 @@ class LLOutbox(Outbox):
         self._add(memory_id, ConnType.send, body)
 
     def request_model(self, learner_id: str, **kwargs) -> None:
-        self._add(learner_id, ConnType.request, kwargs, extension='model')
+        self._add(learner_id, ConnType.request, kwargs)
 
     def send_learner_task(self, learner_id: str, task: Any, **kwargs) -> None:
         body = {'task': task}
@@ -130,7 +130,7 @@ class LLReasoner(MHAModule):
 
     def _receive_learning_status(self, sender: str, channel: str, msg: Message) -> Update:
         self.info(f'Received learning status {msg.id} from {sender}. Processing...')
-        learning_status = msg.body.pop('action_status')
+        learning_status = msg.body.pop('learning_status')
         update = self._base.on_learning_status(state=self._state, sender=sender, learning_status=learning_status, **msg.body)
         self.debug(f'Finished processing learning status {msg.id}!')
         return update

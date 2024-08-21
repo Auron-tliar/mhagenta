@@ -63,6 +63,9 @@ class HLReasoner(MHAModule):
             out_id_channels.append(self.sender_reg_entry(goal_graph, ConnType.send))
             in_id_channels_callbacks.append(self.recipient_reg_entry(goal_graph, ConnType.send, self._receive_goal_update))
 
+        for actuator in self._directory.actuation:
+            out_id_channels.append(self.sender_reg_entry(actuator, ConnType.request))
+
         super().__init__(
             global_params=global_params,
             module_id=self._base.module_id,

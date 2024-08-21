@@ -438,7 +438,7 @@ test_conn = TestTemplate(
     control_frequency=.5,
     status_period=4,
     start_time=-1,
-    start_sync_delay= 2.,
+    start_sync_delay=2.,
     save_dir=r'D:\bsc-tmp\phd\phd_thesis\hybrid-agent\out',
     verbose=True
 )

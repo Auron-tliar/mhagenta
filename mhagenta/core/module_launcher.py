@@ -1,10 +1,14 @@
+import os
+
 import dill
 from sys import argv, exit
+from pathlib import Path
 import asyncio
 from typing import *
 from pydantic import BaseModel
 from mhagenta.modules import *
-from mhagenta.utils import ModuleTypes
+from mhagenta.outboxes import *
+from mhagenta.utils import ModuleTypes, Observation, ActionStatus
 from mhagenta.core.processes import run_agent_module, MHAModule, ModuleBase, GlobalParams
 from mhagenta.base import *
 
@@ -30,8 +34,10 @@ if __name__ == "__main__":
     if len(argv) < 2:
         exit('Expected [params_path] as an argument!')
 
-    with open(argv[1].replace('\"', ''), 'rb') as f:
+    file_path = Path(argv[1].replace('\"', ''))
+    with open(file_path, 'rb') as f:
         params = dill.load(f)
+    os.remove(file_path)
     module_name, params = params['class'], params['kwargs']
     module_data = MODULE_NAME_TO_CLASS[module_name]
     module_cls = module_data.module_cls

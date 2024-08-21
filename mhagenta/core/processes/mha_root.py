@@ -117,6 +117,9 @@ class MHARoot(MHAProcess):
         if connector_kwargs is None:
             connector_kwargs = {}
 
+        if not Path(save_dir).exists():
+            Path(save_dir).mkdir(parents=True, exist_ok=True)
+
         self._global_params = GlobalParams(
             agent_id=agent_id,
             directory=self._directory,
@@ -308,3 +311,11 @@ class MHARoot(MHAProcess):
             return [modules.module_id]
 
         return [module.module_id for module in modules]
+
+    @property
+    def agent_id(self) -> str:
+        return self._agent_id
+
+    @property
+    def save_dir(self) -> str:
+        return self._global_params.save_dir

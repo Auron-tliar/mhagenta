@@ -275,9 +275,6 @@ class MHAProcess(MHABase, ABC):
     async def start(self) -> str:
         if self._stage < self.Stage.initializing:
             await self.initialize()
-        # while self._stage < self.Stage.ready:
-        #     # self.debug(f'Current stage: {self._stage}')
-        #     await asyncio.sleep(self._control_frequency)
 
         self._stage = self.Stage.starting
 

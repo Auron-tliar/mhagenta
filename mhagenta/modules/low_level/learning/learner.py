@@ -9,8 +9,8 @@ class LearnerOutbox(Outbox):
     def request_memories(self, memory_id: str = ModuleTypes.MEMORY, **kwargs) -> None:
         self._add(memory_id, ConnType.request, kwargs)
 
-    def send_status(self, ll_reasoner_id: str, status: Any, **kwargs) -> None:
-        body = {'status': status}
+    def send_status(self, ll_reasoner_id: str, learning_status: Any, **kwargs) -> None:
+        body = {'learning_status': learning_status}
         if kwargs:
             body.update(kwargs)
         self._add(ll_reasoner_id, ConnType.send, body, extension='status')

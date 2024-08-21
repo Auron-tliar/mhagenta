@@ -82,6 +82,7 @@ class MHAModule(MHAProcess):
             agent_id=global_params.agent_id,
             module_id=module_id,
             time_func=self._time.get_exec_time,
+            directory=global_params.directory,
             **initial_state)
         self._status_frequency = global_params.status_frequency
 
@@ -306,7 +307,7 @@ class MHAModule(MHAProcess):
     def save_state(self) -> None:
         path = Path(self._save_dir)
         path.mkdir(exist_ok=True)
-        path /= f'{self._agent_id}.{self._module_id}.sav)'
+        path /= f'{self._agent_id}.{self._module_id}.sav'
         match self._save_format:
             case 'json':
                 path = path.with_suffix('.json')
