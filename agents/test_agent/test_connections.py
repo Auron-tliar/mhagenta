@@ -635,7 +635,6 @@ def check_module_result(module_id: str, actual_state: dict[str, set], expected_s
 
 
 def check_module(agent_id: str, module_id: str, save_dir: Path, expected_state: dict[str, set], save_format: Literal['json', 'dill'] = 'json') -> int:
-    save_format = test_data.save_format
     with open(Path(save_dir) / f'{agent_id}.{module_id}.{"sav" if save_format == "dill" else "json"}', 'rb') as f:
         actual_state = (dill if save_format == 'dill' else json).load(f)
     return check_module_result(module_id, actual_state, expected_state)
