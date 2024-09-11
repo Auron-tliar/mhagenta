@@ -68,10 +68,7 @@ class HLReasoner(MHAModule):
 
         super().__init__(
             global_params=global_params,
-            module_id=self._base.module_id,
-            module_type=self._base.module_type,
-            initial_state=self._base.initial_state,
-            step_action=self._base.step if not self._base.is_reactive else None,
+            base=base,
             out_id_channels=out_id_channels,
             in_id_channel_callbacks=in_id_channels_callbacks
         )

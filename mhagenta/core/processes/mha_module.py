@@ -39,12 +39,23 @@ class ModuleBase:
     def __init__(self,
                  module_id: str,
                  initial_state: dict[str, Any] | None = None,
+                 init_kwargs: dict[str, Any] | None = None
                  ) -> None:
         self.module_id = module_id
         self.initial_state = initial_state
+        self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
 
     def step(self, state: State) -> Update:
         raise NotImplementedError()
+
+    def on_init(self, **kwargs) -> None:
+        pass
+
+    def on_first(self, state: State) -> Update:
+        pass
+
+    def on_last(self, state: State) -> State:
+        pass
 
     @property
     def is_reactive(self) -> bool:
@@ -55,10 +66,7 @@ class ModuleBase:
 class MHAModule(MHAProcess):
     def __init__(self,
                  global_params: GlobalParams,
-                 module_id: str,
-                 module_type: str,
-                 initial_state: dict[str, Any] | None,
-                 step_action: StepAction | None,
+                 base: ModuleBase,
                  out_id_channels: Iterable[tuple[Recipient, Channel]],
                  in_id_channel_callbacks: Iterable[tuple[Sender, Channel, MessageCallback]]
                  ) -> None:
@@ -69,21 +77,22 @@ class MHAModule(MHAProcess):
             exec_duration=global_params.exec_duration,
             step_frequency=global_params.step_frequency,
             control_frequency=global_params.control_frequency,
-            log_id=module_id,
+            log_id=base.module_id,
             log_level=global_params.log_level,
             log_format=global_params.log_format
         )
 
-        self._module_id = module_id
+        self._base = base
+        self._module_id = self._base.module_id
 
-        if initial_state is None:
-            initial_state = dict()
+        if self._base.initial_state is None:
+            self._base.initial_state = dict()
         self._state = State(
             agent_id=global_params.agent_id,
-            module_id=module_id,
+            module_id=self._base.module_id,
             time_func=self._time.get_exec_time,
             directory=global_params.directory,
-            **initial_state)
+            **self._base.initial_state)
         self._status_frequency = global_params.status_frequency
 
         self._save_dir = global_params.save_dir
@@ -91,14 +100,14 @@ class MHAModule(MHAProcess):
         if global_params.resume:
             self.load_state()
 
-        self._step_action = step_action
+        self._step_action = self._base.step if not self._base.is_reactive else None
         self._step_counter = 0
 
         self._messenger = ModuleMessenger(
             connector_cls=global_params.connector_cls,
             agent_id=global_params.agent_id,
-            module_type=module_type,
-            module_id=module_id,
+            module_type=self._base.module_type,
+            module_id=self._module_id,
             agent_time=self._time,
             out_id_channels=out_id_channels,
             in_id_channel_callbacks=[(sender, channel, self._on_msg_task_generator(callback))
@@ -112,6 +121,7 @@ class MHAModule(MHAProcess):
 
     async def on_init(self) -> None:
         await self._messenger.initialize()
+        self._base.on_init(**self._base.init_kwargs)
 
     async def on_start(self) -> None:
         self._task_group.create_task(self._messenger.start())
@@ -147,6 +157,7 @@ class MHAModule(MHAProcess):
         self._stage = self.Stage.running
 
     async def on_run(self) -> None:
+        self._on_first_step()
         self._queue.push(
             func=self._on_step_task,
             ts=self._time.agent,
@@ -154,8 +165,31 @@ class MHAModule(MHAProcess):
             frequency=self._step_frequency
         )
 
+    def _on_first_step(self) -> None:
+        try:
+            self.debug(f'Running first (pre) step...')
+            self._step_counter += 1
+            update = self._base.on_first(self._state)
+            self._process_update(update)
+        except Exception as ex:
+            self.warning(f'Caught exception \"{ex}\" while running the first (pre) step action!'
+                         f' Aborting and attempting to resume execution...')
+            raise ex
+
+    def _on_last_step(self) -> None:
+        try:
+            self.debug(f'Running last (post) step...')
+            self._step_counter += 1
+            update = self._base.on_last(self._state)
+            self._process_update(update)
+        except Exception as ex:
+            self.warning(f'Caught exception \"{ex}\" while running the last (post) step action!'
+                         f' Aborting and attempting to resume execution...')
+            raise ex
+
     async def on_stop(self) -> None:
         self.info('Stopping')
+        self._on_last_step()
         self.save_state()
         self._queue.clear()
         self._report_status()

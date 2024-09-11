@@ -40,7 +40,7 @@ async def run_test(test: TestTemplate, save_dir: str | os.PathLike = r'D:\bsc-tm
         learner=test.learner,
         memory=test.memory,
         knowledge=test.knowledge,
-        hl_reasoner=test.hl_reasoner,
+        hl_reasoners=test.hl_reasoner,
         goal_graph=test.goal_graph
     )
 
