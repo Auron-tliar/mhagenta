@@ -32,7 +32,7 @@ def initialize_module(
 
     kwargs = {
         'global_params': global_params.model_dump(),
-        'base': dill.dumps(base)
+        'base': dill.dumps(base, recurse=True)
     }
 
     params = {

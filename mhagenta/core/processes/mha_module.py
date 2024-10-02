@@ -46,16 +46,16 @@ class ModuleBase:
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
 
     def step(self, state: State) -> Update:
-        raise NotImplementedError()
+        return state
 
     def on_init(self, **kwargs) -> None:
         pass
 
     def on_first(self, state: State) -> Update:
-        pass
+        return state
 
     def on_last(self, state: State) -> State:
-        pass
+        return state
 
     @property
     def is_reactive(self) -> bool:
@@ -144,13 +144,13 @@ class MHAModule(MHAProcess):
 
     def _on_step_task(self) -> None:
         try:
-            self.debug(f'Running step {self._step_counter}...')
+            self.debug(f'Running step {self._step_counter} [[[{self._state}]]]...')
             self._step_counter += 1
             update = self._step_action(self._state)
             self._process_update(update)
         except Exception as ex:
-            self.warning(f'Caught exception \"{ex}\" while running the step action {self._loop_counter}!'
-                         f' Aborting step action {self._loop_counter} and attempting to resume execution...')
+            self.warning(f'Caught exception \"{ex}\" while running the step action {self._step_counter}!'
+                         f' Aborting step action {self._step_counter} and attempting to resume execution...')
             raise ex
 
     def _run(self) -> None:
