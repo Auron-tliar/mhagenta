@@ -2,7 +2,7 @@ import json
 import sys
 
 import dill
-from typing import Any, Iterable, Self, Iterator, Callable, Literal
+from typing import Any, Iterable, Self, Iterator, Literal
 from pathlib import Path
 import logging
 import asyncio
@@ -394,8 +394,7 @@ def check_results(agent_id: str, save_dir: str | Path, test_data: TestData) -> N
     total_num += test_data.n_memory
     print(f'\t\t-----------------\n\t\tAverage number of steps: {average / test_data.n_memory}')
 
-    print(f'\t-----------------\n\tTotal average: {total_average / total_num}')
-
+    print(f'\t-----------------\n\tTotal average: {total_average / total_num} ({total_average / total_num / test_data.exec_duration} steps per second)')
 
 
 async def run_agent(agent: MHARoot, test_data: TestData, only_test: bool = False) -> None:
