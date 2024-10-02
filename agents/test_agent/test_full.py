@@ -1,6 +1,8 @@
 import json
 import sys
 
+import numpy as np
+
 import dill
 from typing import Any, Iterable, Self, Iterator, Callable, Literal
 from pathlib import Path
@@ -825,7 +827,7 @@ if __name__ == '__main__':
                 'received_from': set()
             }
         ) for module_id in test_data.knowledge],
-        hl_reasoner=[TestHLReasoner(
+        hl_reasoners=[TestHLReasoner(
             module_id=module_id,
             initial_state={
                 'step_counter': 0,

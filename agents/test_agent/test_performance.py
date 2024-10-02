@@ -449,7 +449,7 @@ if __name__ == '__main__':
                 'step_counter': 0
             }
         ) for module_id in test_data.knowledge],
-        hl_reasoner=[TestHLReasoner(
+        hl_reasoners=[TestHLReasoner(
             module_id=module_id,
             initial_state={
                 'step_counter': 0

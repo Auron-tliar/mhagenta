@@ -69,7 +69,7 @@ class MHARoot(MHAProcess):
                  ll_reasoners: Iterable[LLReasonerBase] | LLReasonerBase,
                  learners: Iterable[LearnerBase] | LearnerBase | None = None,
                  knowledge: Iterable[KnowledgeBase] | KnowledgeBase | None = None,
-                 hl_reasoner: Iterable[HLReasonerBase] | HLReasonerBase | None = None,
+                 hl_reasoners: Iterable[HLReasonerBase] | HLReasonerBase | None = None,
                  goal_graphs: Iterable[GoalGraphBase] | GoalGraphBase | None = None,
                  memory: Iterable[MemoryBase] | MemoryBase | None = None,
                  connector_kwargs: dict[str, Any] | None = None,
@@ -105,7 +105,7 @@ class MHARoot(MHAProcess):
             ll_reasoning=self.extract_module_names(ll_reasoners),
             learning=self.extract_module_names(learners),
             knowledge=self.extract_module_names(knowledge),
-            hl_reasoning=self.extract_module_names(hl_reasoner),
+            hl_reasoning=self.extract_module_names(hl_reasoners),
             goals=self.extract_module_names(goal_graphs),
             memory=self.extract_module_names(memory),
         )
@@ -155,7 +155,7 @@ class MHARoot(MHAProcess):
         self._add_modules(ll_reasoners)
         self._add_modules(learners)
         self._add_modules(knowledge)
-        self._add_modules(hl_reasoner)
+        self._add_modules(hl_reasoners)
         self._add_modules(goal_graphs)
         self._add_modules(memory)
 
