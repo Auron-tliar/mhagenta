@@ -1,8 +1,6 @@
 import json
 import sys
 
-import numpy as np
-
 import dill
 from typing import Any, Iterable, Self, Iterator, Callable, Literal
 from pathlib import Path
@@ -14,7 +12,6 @@ from mhagenta import State, Observation, ActionStatus, Goal, Belief
 from mhagenta.base import *
 from mhagenta.outboxes import *
 from mhagenta.utils.common import Directory
-from mhagenta.utils.common.typing import Update
 from mhagenta.core.processes import MHARoot
 from mhagenta.core import RabbitMQConnector
 
