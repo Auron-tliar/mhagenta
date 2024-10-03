@@ -7,7 +7,7 @@ import asyncio
 from typing import *
 from pydantic import BaseModel
 from mhagenta.modules import *
-from mhagenta.outboxes import *
+from mhagenta.states import *
 from mhagenta.utils import ModuleTypes, Observation, ActionStatus
 from mhagenta.core.processes import run_agent_module, MHAModule, ModuleBase, GlobalParams
 from mhagenta.base import *

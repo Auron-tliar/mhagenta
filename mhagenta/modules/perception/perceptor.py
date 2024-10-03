@@ -1,6 +1,5 @@
 from typing import ClassVar
 from mhagenta.utils import ModuleTypes, ConnType, Message, Observation, Outbox, State
-from mhagenta.utils.common.typing import Update
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
 
 
@@ -12,10 +11,13 @@ class PerceptorOutbox(Outbox):
         self._add(ll_reasoner_id, ConnType.send, body)
 
 
+PerceptorState = State[PerceptorOutbox]
+
+
 class PerceptorBase(ModuleBase):
     module_type: ClassVar[str] = ModuleTypes.PERCEPTOR
 
-    def on_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_request(self, state: PerceptorState, sender: str, **kwargs) -> PerceptorState:
         raise NotImplementedError()
 
 
@@ -39,10 +41,11 @@ class Perceptor(MHAModule):
             global_params=global_params,
             base=base,
             out_id_channels=out_id_channels,
-            in_id_channel_callbacks=in_id_channels_callbacks
+            in_id_channel_callbacks=in_id_channels_callbacks,
+            outbox_cls=PerceptorOutbox
         )
 
-    def receive_request(self, sender: str, channel: str, msg: Message) -> Update:
+    def receive_request(self, sender: str, channel: str, msg: Message) -> PerceptorState:
         self.info(f'Received observation request {msg.id} from {sender}. Processing...')
         update = self._base.on_request(self._state, sender=sender, **msg.body)
         self.debug(f'Finished processing observation request {msg.id}!')

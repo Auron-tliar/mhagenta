@@ -1,7 +1,6 @@
 from typing import Any, Iterable, ClassVar
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Goal, Belief, State
-from mhagenta.utils.common.typing import Update
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
 
 
@@ -28,13 +27,16 @@ class HLOutbox(Outbox):
         self._add(goal_graph_id, ConnType.send, body)
 
 
+HLState = State[HLOutbox]
+
+
 class HLReasonerBase(ModuleBase):
     module_type: ClassVar[str] = ModuleTypes.HLREASONER
 
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+    def on_belief_update(self, state: HLState, sender: str, beliefs: Iterable[Belief], **kwargs) -> HLState:
         raise NotImplementedError()
 
-    def on_goal_update(self, state: State, sender: str, goals: Iterable[Goal], **kwargs) -> Update:
+    def on_goal_update(self, state: HLState, sender: str, goals: Iterable[Goal], **kwargs) -> HLState:
         raise NotImplementedError()
 
 
@@ -70,17 +72,18 @@ class HLReasoner(MHAModule):
             global_params=global_params,
             base=base,
             out_id_channels=out_id_channels,
-            in_id_channel_callbacks=in_id_channels_callbacks
+            in_id_channel_callbacks=in_id_channels_callbacks,
+            outbox_cls=HLOutbox
         )
 
-    def _receive_belief_update(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_belief_update(self, sender: str, channel: str, msg: Message) -> HLState:
         self.info(f'Received belief update {msg.id} from {sender}. Processing...')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_belief_update(state=self._state, sender=sender, beliefs=beliefs, **msg.body)
         self.debug(f'Finished processing belief update {msg.id}!')
         return update
 
-    def _receive_goal_update(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_goal_update(self, sender: str, channel: str, msg: Message) -> HLState:
         self.info(f'Received goal update {msg.id} from {sender}. Processing...')
         update = self._base.on_goal_update(state=self._state, sender=sender, **msg.body)
         self.debug(f'Finished processing goal update {msg.id}!')

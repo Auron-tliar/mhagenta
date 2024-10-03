@@ -1,4 +1,4 @@
-from .knowledge import Knowledge, KnowledgeBase, KnowledgeOutbox
+from .knowledge import Knowledge, KnowledgeBase, KnowledgeOutbox, KnowledgeState
 
 
-__all__ = ['Knowledge', 'KnowledgeBase', 'KnowledgeOutbox']
+__all__ = ['Knowledge', 'KnowledgeBase', 'KnowledgeOutbox', 'KnowledgeState']

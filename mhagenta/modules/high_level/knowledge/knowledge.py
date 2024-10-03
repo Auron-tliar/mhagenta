@@ -1,7 +1,6 @@
 from typing import ClassVar, Iterable
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Belief, State
-from mhagenta.utils.common.typing import Update
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
 
 
@@ -19,13 +18,16 @@ class KnowledgeOutbox(Outbox):
         self._add(knowledge_id, ConnType.send, body)
 
 
+KnowledgeState = State[KnowledgeOutbox]
+
+
 class KnowledgeBase(ModuleBase):
     module_type: ClassVar[str] = ModuleTypes.KNOWLEDGE
 
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+    def on_belief_update(self, state: KnowledgeState, sender: str, beliefs: Iterable[Belief], **kwargs) -> KnowledgeState:
         raise NotImplementedError()
 
-    def on_belief_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_belief_request(self, state: KnowledgeState, sender: str, **kwargs) -> KnowledgeState:
         raise NotImplementedError()
 
 
@@ -56,17 +58,18 @@ class Knowledge(MHAModule):
             global_params=global_params,
             base=base,
             out_id_channels=out_id_channels,
-            in_id_channel_callbacks=in_id_channels_callbacks
+            in_id_channel_callbacks=in_id_channels_callbacks,
+            outbox_cls=KnowledgeOutbox
         )
 
-    def _receive_beliefs(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_beliefs(self, sender: str, channel: str, msg: Message) -> KnowledgeState:
         self.info(f'Received belief update {msg.id} from {sender}. Processing...')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_belief_update(state=self._state, sender=sender, beliefs=beliefs, **msg.body)
         self.debug(f'Finished processing belief update {msg.id}!')
         return update
 
-    def _receive_belief_request(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_belief_request(self, sender: str, channel: str, msg: Message) -> KnowledgeState:
         self.info(f'Received beliefs request {msg}. Processing...')
         update = self._base.on_belief_request(state=self._state, sender=sender, **msg.body)
         self.debug(f'Finished processing beliefs request {msg.id}!')

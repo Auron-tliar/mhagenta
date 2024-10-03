@@ -1,7 +1,6 @@
 from typing import Any, Iterable, ClassVar
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Observation, Belief, State
-from mhagenta.utils.common.typing import Update
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
 
 
@@ -19,19 +18,22 @@ class MemoryOutbox(Outbox):
         self._add(hl_reasoner_id, ConnType.send, body)
 
 
+MemoryState = State[MemoryOutbox]
+
+
 class MemoryBase(ModuleBase):
     module_type: ClassVar[str] = ModuleTypes.MEMORY
 
-    def on_observation_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_observation_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
         raise NotImplementedError()
 
-    def on_belief_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_belief_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
         raise NotImplementedError()
 
-    def on_observation_update(self, state: State, sender: str, observations: Iterable[Observation], **kwargs) -> Update:
+    def on_observation_update(self, state: MemoryState, sender: str, observations: Iterable[Observation], **kwargs) -> MemoryState:
         raise NotImplementedError()
 
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+    def on_belief_update(self, state: MemoryState, sender: str, beliefs: Iterable[Belief], **kwargs) -> MemoryState:
         raise NotImplementedError()
 
 
@@ -65,30 +67,31 @@ class Memory(MHAModule):
             global_params=global_params,
             base=base,
             out_id_channels=out_id_channels,
-            in_id_channel_callbacks=in_id_channels_callbacks
+            in_id_channel_callbacks=in_id_channels_callbacks,
+            outbox_cls=MemoryOutbox
         )
 
-    def _receive_observations(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_observations(self, sender: str, channel: str, msg: Message) -> MemoryState:
         self.info(f'Received observation update {msg.id} from {sender}. Processing...')
         observations = msg.body.pop('observations')
         update = self._base.on_observation_update(state=self._state, sender=sender, observations=observations, **msg.body)
         self.debug(f'Finished processing observation update {msg.id}!')
         return update
 
-    def _receive_beliefs(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_beliefs(self, sender: str, channel: str, msg: Message) -> MemoryState:
         self.info(f'Received belief update {msg.id} from {sender}. Processing...')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_belief_update(state=self._state, sender=sender, beliefs=beliefs, **msg.body)
         self.debug(f'Finished processing belief update {msg.id}!')
         return update
 
-    def _receive_observation_request(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_observation_request(self, sender: str, channel: str, msg: Message) -> MemoryState:
         self.info(f'Received observation request {msg.id} from {sender}. Processing...')
         update = self._base.on_observation_request(state=self._state, sender=sender, **msg.body)
         self.debug(f'Finished processing observation request {msg.id}!')
         return update
 
-    def _receive_belief_request(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_belief_request(self, sender: str, channel: str, msg: Message) -> MemoryState:
         self.info(f'Received belief request {msg.id} from {sender}. Processing...')
         update = self._base.on_belief_request(state=self._state, sender=sender, **msg.body)
         self.debug(f'Finished processing belief request {msg.id}!')

@@ -10,7 +10,7 @@ from sys import argv
 
 from mhagenta import State, Observation, ActionStatus, Goal, Belief
 from mhagenta.base import *
-from mhagenta.outboxes import *
+from mhagenta.states import *
 from mhagenta.utils.common import Directory
 from mhagenta.core.processes import MHARoot
 from mhagenta.core import RabbitMQConnector
@@ -419,207 +419,192 @@ class BaseAuxiliary:
 
         return signature_gen
 
-    def process_and_send(self, func_name: str, state: State, signature: tuple[str, str, str] | None = None) -> Update:
+    def process_and_send(self, func_name: str, state: State, signature: tuple[str, str, str] | None = None) -> State:
         if signature is not None:
             state.received_from.add((func_name, signature[0], signature[1], signature[2]))
         if func_name not in state.sent_from:
-            outbox = self.message_all(state.directory, func_name)
+            self.message_all(state, state.directory, func_name)
             state.sent_from.add(func_name)
-        else:
-            outbox = None
-        return state, outbox
+        return state
+
+    def message_all(self, state: State, directory: str, func_name: str) -> None:
+        pass
 
 
 class TestLLReasoner(LLReasonerBase, BaseAuxiliary):
-    def step(self, state: State) -> Update:
+    def step(self, state: LLState) -> LLState:
         state.step_counter += 1
         return self.process_and_send(self.step.__name__, state)
 
-    def on_observation(self, state: State, sender: str, observation: Observation, **kwargs) -> Update:
+    def on_observation(self, state: LLState, sender: str, observation: Observation, **kwargs) -> LLState:
         return self.process_and_send(self.on_observation.__name__, state, kwargs['signature'])
 
-    def on_action_status(self, state: State, sender: str, action_status: ActionStatus, **kwargs) -> Update:
+    def on_action_status(self, state: LLState, sender: str, action_status: ActionStatus, **kwargs) -> LLState:
         return self.process_and_send(self.on_action_status.__name__, state, kwargs['signature'])
 
-    def on_goal_update(self, state: State, sender: str, goals: list[Goal], **kwargs) -> Update:
+    def on_goal_update(self, state: LLState, sender: str, goals: list[Goal], **kwargs) -> LLState:
         return self.process_and_send(self.on_goal_update.__name__, state, kwargs['signature'])
 
-    def on_learning_status(self, state: State, sender: str, learning_status: Any, **kwargs) -> Update:
+    def on_learning_status(self, state: LLState, sender: str, learning_status: Any, **kwargs) -> LLState:
         return self.process_and_send(self.on_learning_status.__name__, state, kwargs['signature'])
 
-    def on_model(self, state: State, sender: str, model: Any, **kwargs) -> Update:
+    def on_model(self, state: LLState, sender: str, model: Any, **kwargs) -> LLState:
         return self.process_and_send(self.on_model.__name__, state, kwargs['signature'])
 
-    def message_all(self, directory: Directory, func_name: str) -> LLOutbox:
-        outbox = LLOutbox()
+    def message_all(self, state: LLState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for actuator in directory.actuation:
-            outbox.request_action(actuator_id=actuator, signature=signature_gen(actuator))
+            state.outbox.request_action(actuator_id=actuator, signature=signature_gen(actuator))
         for perceptor in directory.perception:
-            outbox.request_observation(perceptor_id=perceptor, signature=signature_gen(perceptor))
+            state.outbox.request_observation(perceptor_id=perceptor, signature=signature_gen(perceptor))
         for learner in directory.learning:
-            outbox.request_model(learner_id=learner, signature=signature_gen(learner))
-            outbox.send_learner_task(learner_id=learner, task=None, signature=signature_gen(learner))
+            state.outbox.request_model(learner_id=learner, signature=signature_gen(learner))
+            state.outbox.send_learner_task(learner_id=learner, task=None, signature=signature_gen(learner))
         for goal_graph in directory.goals:
-            outbox.request_goals(goal_graph_id=goal_graph, signature=signature_gen(goal_graph))
-            outbox.send_goal_update(goal_graph_id=goal_graph, goals=[], signature=signature_gen(goal_graph))
+            state.outbox.request_goals(goal_graph_id=goal_graph, signature=signature_gen(goal_graph))
+            state.outbox.send_goal_update(goal_graph_id=goal_graph, goals=[], signature=signature_gen(goal_graph))
         for knowledge in directory.knowledge:
-            outbox.send_beliefs(knowledge_id=knowledge, beliefs=[], signature=signature_gen(knowledge))
+            state.outbox.send_beliefs(knowledge_id=knowledge, beliefs=[], signature=signature_gen(knowledge))
         for memory in directory.memory:
-            outbox.send_memories(memory_id=memory, observations=[], signature=signature_gen(memory))
-        return outbox
+            state.outbox.send_memories(memory_id=memory, observations=[], signature=signature_gen(memory))
 
 
 class TestActuator(ActuatorBase, BaseAuxiliary):
-    def step(self, state: State) -> Update:
+    def step(self, state: ActuatorState) -> ActuatorState:
         state.step_counter += 1
         return self.process_and_send(self.step.__name__, state)
 
-    def on_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_request(self, state: ActuatorState, sender: str, **kwargs) -> ActuatorState:
         return self.process_and_send(self.on_request.__name__, state, kwargs['signature'])
 
-    def message_all(self, directory: Directory, func_name: str) -> ActuatorOutbox:
-        outbox = ActuatorOutbox()
+    def message_all(self, state: ActuatorState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for ll_reasoner in directory.ll_reasoning:
-            outbox.send_status(ll_reasoner_id=ll_reasoner, status=ActionStatus(status=None), signature=signature_gen(ll_reasoner))
-        return outbox
+            state.outbox.send_status(ll_reasoner_id=ll_reasoner, status=ActionStatus(status=None), signature=signature_gen(ll_reasoner))
 
 
 class TestPerceptor(PerceptorBase, BaseAuxiliary):
-    def step(self, state: State) -> Update:
+    def step(self, state: PerceptorState) -> PerceptorState:
         state.step_counter += 1
         return self.process_and_send(self.step.__name__, state)
 
-    def on_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_request(self, state: PerceptorState, sender: str, **kwargs) -> PerceptorState:
         return self.process_and_send(self.on_request.__name__, state, kwargs['signature'])
 
-    def message_all(self, directory: Directory, func_name: str) -> PerceptorOutbox:
-        outbox = PerceptorOutbox()
+    def message_all(self, state: PerceptorState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for ll_reasoner in directory.ll_reasoning:
-            outbox.send_observation(ll_reasoner_id=ll_reasoner, observation=Observation(observation_type='none', value=None), signature=signature_gen(ll_reasoner))
-        return outbox
+            state.outbox.send_observation(ll_reasoner_id=ll_reasoner, observation=Observation(observation_type='none', value=None), signature=signature_gen(ll_reasoner))
 
 
 class TestLearner(LearnerBase, BaseAuxiliary):
-    def step(self, state: State) -> Update:
+    def step(self, state: LearnerState) -> LearnerState:
         state.step_counter += 1
         return self.process_and_send(self.step.__name__, state)
 
-    def on_task(self, state: State, sender: str, task: Any, **kwargs) -> Update:
+    def on_task(self, state: LearnerState, sender: str, task: Any, **kwargs) -> LearnerState:
         return self.process_and_send(self.on_task.__name__, state, kwargs['signature'])
 
-    def on_memories(self, state: State, sender: str, observations: Iterable[Observation], **kwargs) -> Update:
+    def on_memories(self, state: LearnerState, sender: str, observations: Iterable[Observation], **kwargs) -> LearnerState:
         return self.process_and_send(self.on_memories.__name__, state, kwargs['signature'])
 
-    def on_model_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_model_request(self, state: LearnerState, sender: str, **kwargs) -> LearnerState:
         return self.process_and_send(self.on_model_request.__name__, state, kwargs['signature'])
 
-    def message_all(self, directory: Directory, func_name: str) -> LearnerOutbox:
-        outbox = LearnerOutbox()
+    def message_all(self, state: LearnerState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for memory in directory.memory:
-            outbox.request_memories(memory_id=memory, signature=signature_gen(memory))
+            state.outbox.request_memories(memory_id=memory, signature=signature_gen(memory))
         for ll_reasoner in directory.ll_reasoning:
-            outbox.send_status(ll_reasoner_id=ll_reasoner, learning_status=None, signature=signature_gen(ll_reasoner))
-            outbox.send_model(ll_reasoner_id=ll_reasoner, model=None, signature=signature_gen(ll_reasoner))
-        return outbox
+            state.outbox.send_status(ll_reasoner_id=ll_reasoner, learning_status=None, signature=signature_gen(ll_reasoner))
+            state.outbox.send_model(ll_reasoner_id=ll_reasoner, model=None, signature=signature_gen(ll_reasoner))
 
 
 class TestKnowledge(KnowledgeBase, BaseAuxiliary):
-    def step(self, state: State) -> Update:
+    def step(self, state: KnowledgeState) -> KnowledgeState:
         state.step_counter += 1
         return self.process_and_send(self.step.__name__, state)
 
-    def on_belief_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_belief_request(self, state: KnowledgeState, sender: str, **kwargs) -> KnowledgeState:
         return self.process_and_send(self.on_belief_request.__name__, state, kwargs['signature'])
 
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+    def on_belief_update(self, state: KnowledgeState, sender: str, beliefs: Iterable[Belief], **kwargs) -> KnowledgeState:
         return self.process_and_send(self.on_belief_update.__name__, state, kwargs['signature'])
 
-    def message_all(self, directory: Directory, func_name: str) -> KnowledgeOutbox:
-        outbox = KnowledgeOutbox()
+    def message_all(self, state: KnowledgeState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for hl_reasoner in directory.hl_reasoning:
-            outbox.send_beliefs(knowledge_id=hl_reasoner, beliefs=[], signature=signature_gen(hl_reasoner))
+            state.outbox.send_beliefs(knowledge_id=hl_reasoner, beliefs=[], signature=signature_gen(hl_reasoner))
         for memory in directory.memory:
-            outbox.send_memories(memory_id=memory, beliefs=[], signature=signature_gen(memory))
-        return outbox
+            state.outbox.send_memories(memory_id=memory, beliefs=[], signature=signature_gen(memory))
 
 
 class TestHLReasoner(HLReasonerBase, BaseAuxiliary):
-    def step(self, state: State) -> Update:
+    def step(self, state: HLState) -> HLState:
         state.step_counter += 1
         return self.process_and_send(self.step.__name__, state)
 
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+    def on_belief_update(self, state: HLState, sender: str, beliefs: Iterable[Belief], **kwargs) -> HLState:
         return self.process_and_send(self.on_belief_update.__name__, state, kwargs['signature'])
 
-    def on_goal_update(self, state: State, sender: str, goals: Iterable[Goal], **kwargs) -> Update:
+    def on_goal_update(self, state: HLState, sender: str, goals: Iterable[Goal], **kwargs) -> HLState:
         return self.process_and_send(self.on_goal_update.__name__, state, kwargs['signature'])
 
-    def message_all(self, directory: Directory, func_name: str) -> HLOutbox:
-        outbox = HLOutbox()
+    def message_all(self, state: HLState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for memory in directory.memory:
-            outbox.request_memories(memory_id=memory, signature=signature_gen(memory))
+            state.outbox.request_memories(memory_id=memory, signature=signature_gen(memory))
         for actuator in directory.actuation:
-            outbox.request_action(actuator_id=actuator, signature=signature_gen(actuator))
+            state.outbox.request_action(actuator_id=actuator, signature=signature_gen(actuator))
         for knowledge in directory.knowledge:
-            outbox.request_beliefs(knowledge_id=knowledge, signature=signature_gen(knowledge))
-            outbox.send_beliefs(knowledge_id=knowledge, beliefs=[], signature=signature_gen(knowledge))
+            state.outbox.request_beliefs(knowledge_id=knowledge, signature=signature_gen(knowledge))
+            state.outbox.send_beliefs(knowledge_id=knowledge, beliefs=[], signature=signature_gen(knowledge))
         for goal_graph in directory.goals:
-            outbox.send_goals(goal_graph_id=goal_graph, goals=[], signature=signature_gen(goal_graph))
-        return outbox
+            state.outbox.send_goals(goal_graph_id=goal_graph, goals=[], signature=signature_gen(goal_graph))
 
 
 class TestGoalGraph(GoalGraphBase, BaseAuxiliary):
-    def step(self, state: State) -> Update:
+    def step(self, state: GoalGraphState) -> GoalGraphState:
         state.step_counter += 1
         return self.process_and_send(self.step.__name__, state)
 
-    def on_goal_update(self, state: State, sender: str, goals: Iterable[Goal], **kwargs) -> Update:
+    def on_goal_update(self, state: GoalGraphState, sender: str, goals: Iterable[Goal], **kwargs) -> GoalGraphState:
         return self.process_and_send(self.on_goal_update.__name__, state, kwargs['signature'])
 
-    def on_goal_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_goal_request(self, state: GoalGraphState, sender: str, **kwargs) -> GoalGraphState:
         return self.process_and_send(self.on_goal_request.__name__, state, kwargs['signature'])
 
-    def message_all(self, directory: Directory, func_name: str) -> GoalGraphOutbox:
-        outbox = GoalGraphOutbox()
+    def message_all(self, state: GoalGraphState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for hl_reasoner in directory.hl_reasoning:
-            outbox.send_goals(receiver=hl_reasoner, goals=[], signature=signature_gen(hl_reasoner))
+            state.outbox.send_goals(receiver=hl_reasoner, goals=[], signature=signature_gen(hl_reasoner))
         for ll_reasoner in directory.ll_reasoning:
-            outbox.send_goals(receiver=ll_reasoner, goals=[], signature=signature_gen(ll_reasoner))
-        return outbox
+            state.outbox.send_goals(receiver=ll_reasoner, goals=[], signature=signature_gen(ll_reasoner))
 
 
 class TestMemory(MemoryBase, BaseAuxiliary):
-    def step(self, state: State) -> Update:
+    def step(self, state: MemoryState) -> MemoryState:
         state.step_counter += 1
         return self.process_and_send(self.step.__name__, state)
 
-    def on_belief_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_belief_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
         return self.process_and_send(self.on_belief_request.__name__, state, kwargs['signature'])
 
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+    def on_belief_update(self, state: MemoryState, sender: str, beliefs: Iterable[Belief], **kwargs) -> MemoryState:
         return self.process_and_send(self.on_belief_update.__name__, state, kwargs['signature'])
 
-    def on_observation_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_observation_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
         return self.process_and_send(self.on_observation_request.__name__, state, kwargs['signature'])
 
-    def on_observation_update(self, state: State, sender: str, observations: Iterable[Observation], **kwargs) -> Update:
+    def on_observation_update(self, state: MemoryState, sender: str, observations: Iterable[Observation], **kwargs) -> MemoryState:
         return self.process_and_send(self.on_observation_update.__name__, state, kwargs['signature'])
 
-    def message_all(self, directory: Directory, func_name: str) -> MemoryOutbox:
-        outbox = MemoryOutbox()
+    def message_all(self, state: MemoryState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for hl_reasoner in directory.hl_reasoning:
-            outbox.send_beliefs(hl_reasoner_id=hl_reasoner, beliefs=[], signature=signature_gen(hl_reasoner))
+            state.outbox.send_beliefs(hl_reasoner_id=hl_reasoner, beliefs=[], signature=signature_gen(hl_reasoner))
         for learner in directory.learning:
-            outbox.send_observations(learner_id=learner, observations=[], signature=signature_gen(learner))
-        return outbox
+            state.outbox.send_observations(learner_id=learner, observations=[], signature=signature_gen(learner))
 
 
 def check_module_result(

@@ -1,7 +1,6 @@
 from typing import Any, Iterable, ClassVar
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Observation, State
-from mhagenta.utils.common.typing import Update
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
 
 
@@ -22,16 +21,19 @@ class LearnerOutbox(Outbox):
         self._add(ll_reasoner_id, ConnType.send, body, extension='model')
 
 
+LearnerState = State[LearnerOutbox]
+
+
 class LearnerBase(ModuleBase):
     module_type: ClassVar[str] = ModuleTypes.LEARNER
 
-    def on_task(self, state: State, sender: str, task: Any, **kwargs) -> Update:
+    def on_task(self, state: LearnerState, sender: str, task: Any, **kwargs) -> LearnerState:
         raise NotImplementedError()
 
-    def on_memories(self, state: State, sender: str, observations: Iterable[Observation], **kwargs) -> Update:
+    def on_memories(self, state: LearnerState, sender: str, observations: Iterable[Observation], **kwargs) -> LearnerState:
         raise NotImplementedError()
 
-    def on_model_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_model_request(self, state: LearnerState, sender: str, **kwargs) -> LearnerState:
         raise NotImplementedError()
 
 
@@ -61,24 +63,25 @@ class Learner(MHAModule):
             global_params=global_params,
             base=base,
             out_id_channels=out_id_channels,
-            in_id_channel_callbacks=in_id_channels_callbacks
+            in_id_channel_callbacks=in_id_channels_callbacks,
+            outbox_cls=LearnerOutbox
         )
 
-    def _receive_task(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_task(self, sender: str, channel: str, msg: Message) -> LearnerState:
         self.info(f'Received a new task {msg.id} from {sender}. Processing...')
         task = msg.body.pop('task')
         update = self._base.on_task(state=self._state, sender=sender, task=task, **msg.body)
         self.debug(f'Finished processing the new task {msg.id}!')
         return update
 
-    def _receive_memories(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_memories(self, sender: str, channel: str, msg: Message) -> LearnerState:
         self.info(f'Received memories {msg.id} from {sender}. Processing...')
         observations = msg.body.pop('observations')
         update = self._base.on_memories(state=self._state, sender=sender, observations=observations, **msg.body)
         self.debug(f'Finished processing memories {msg.id}!')
         return update
 
-    def _receive_model_request(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_model_request(self, sender: str, channel: str, msg: Message) -> LearnerState:
         self.info(f'Received a model request {msg.id} from {sender}. Processing...')
         update = self._base.on_model_request(state=self._state, sender=sender, **msg.body)
         self.debug(f'Finished processing the model request {msg.id}!')

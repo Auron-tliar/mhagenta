@@ -1,4 +1,4 @@
-from .memory import Memory, MemoryBase, MemoryOutbox
+from .memory import Memory, MemoryBase, MemoryOutbox, MemoryState
 
 
-__all__ = ['Memory', 'MemoryBase', 'MemoryOutbox']
+__all__ = ['Memory', 'MemoryBase', 'MemoryOutbox', 'MemoryState']

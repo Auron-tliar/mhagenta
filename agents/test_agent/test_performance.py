@@ -8,11 +8,9 @@ import logging
 import asyncio
 from sys import argv
 
-from mhagenta import State, Observation, ActionStatus, Goal, Belief
+from mhagenta import Observation, ActionStatus, Goal, Belief
 from mhagenta.base import *
-from mhagenta.outboxes import *
-from mhagenta.utils.common import Directory
-from mhagenta.utils.common.typing import Update
+from mhagenta.states import *
 from mhagenta.core.processes import MHARoot
 from mhagenta.core import RabbitMQConnector
 
@@ -110,195 +108,187 @@ class TestData:
 
 
 class TestLLReasoner(LLReasonerBase):
-    def step(self, state: State) -> Update:
+    def step(self, state: LLState) -> LLState:
         state.step_counter += 1
-        return state, self.message_all(state.directory)
-
-    def on_observation(self, state: State, sender: str, observation: Observation, **kwargs) -> Update:
+        self.message_all(state)
         return state
 
-    def on_action_status(self, state: State, sender: str, action_status: ActionStatus, **kwargs) -> Update:
+    def on_observation(self, state: LLState, sender: str, observation: Observation, **kwargs) -> LLState:
         return state
 
-    def on_goal_update(self, state: State, sender: str, goals: list[Goal], **kwargs) -> Update:
+    def on_action_status(self, state: LLState, sender: str, action_status: ActionStatus, **kwargs) -> LLState:
         return state
 
-    def on_learning_status(self, state: State, sender: str, learning_status: Any, **kwargs) -> Update:
+    def on_goal_update(self, state: LLState, sender: str, goals: list[Goal], **kwargs) -> LLState:
         return state
 
-    def on_model(self, state: State, sender: str, model: Any, **kwargs) -> Update:
+    def on_learning_status(self, state: LLState, sender: str, learning_status: Any, **kwargs) -> LLState:
+        return state
+
+    def on_model(self, state: LLState, sender: str, model: Any, **kwargs) -> LLState:
         return state
 
     @staticmethod
-    def message_all(directory: Directory) -> LLOutbox:
-        outbox = LLOutbox()
-        for actuator in directory.actuation:
-            outbox.request_action(actuator_id=actuator)
-        for perceptor in directory.perception:
-            outbox.request_observation(perceptor_id=perceptor)
-        for learner in directory.learning:
-            outbox.request_model(learner_id=learner)
-            outbox.send_learner_task(learner_id=learner, task=None)
-        for goal_graph in directory.goals:
-            outbox.request_goals(goal_graph_id=goal_graph)
-            outbox.send_goal_update(goal_graph_id=goal_graph, goals=[])
-        for knowledge in directory.knowledge:
-            outbox.send_beliefs(knowledge_id=knowledge, beliefs=[])
-        for memory in directory.memory:
-            outbox.send_memories(memory_id=memory, observations=[])
-        return outbox
+    def message_all(state: LLState) -> None:
+        for actuator in state.directory.actuation:
+            state.outbox.request_action(actuator_id=actuator)
+        for perceptor in state.directory.perception:
+            state.outbox.request_observation(perceptor_id=perceptor)
+        for learner in state.directory.learning:
+            state.outbox.request_model(learner_id=learner)
+            state.outbox.send_learner_task(learner_id=learner, task=None)
+        for goal_graph in state.directory.goals:
+            state.outbox.request_goals(goal_graph_id=goal_graph)
+            state.outbox.send_goal_update(goal_graph_id=goal_graph, goals=[])
+        for knowledge in state.directory.knowledge:
+            state.outbox.send_beliefs(knowledge_id=knowledge, beliefs=[])
+        for memory in state.directory.memory:
+            state.outbox.send_memories(memory_id=memory, observations=[])
 
 
 class TestActuator(ActuatorBase):
-    def step(self, state: State) -> Update:
+    def step(self, state: ActuatorState) -> ActuatorState:
         state.step_counter += 1
-        return state, self.message_all(state.directory)
+        self.message_all(state)
+        return state
 
-    def on_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_request(self, state: ActuatorState, sender: str, **kwargs) -> ActuatorState:
         return state
 
     @staticmethod
-    def message_all(directory: Directory) -> ActuatorOutbox:
-        outbox = ActuatorOutbox()
-        for ll_reasoner in directory.ll_reasoning:
-            outbox.send_status(ll_reasoner_id=ll_reasoner, status=ActionStatus(status=None))
-        return outbox
+    def message_all(state: ActuatorState) -> None:
+        for ll_reasoner in state.directory.ll_reasoning:
+            state.outbox.send_status(ll_reasoner_id=ll_reasoner, status=ActionStatus(status=None))
 
 
 class TestPerceptor(PerceptorBase):
-    def step(self, state: State) -> Update:
+    def step(self, state: PerceptorState) -> PerceptorState:
         state.step_counter += 1
-        return state, self.message_all(state.directory)
+        self.message_all(state)
+        return state
 
-    def on_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_request(self, state: PerceptorState, sender: str, **kwargs) -> PerceptorState:
         return state
 
     @staticmethod
-    def message_all(directory: Directory) -> PerceptorOutbox:
-        outbox = PerceptorOutbox()
-        for ll_reasoner in directory.ll_reasoning:
-            outbox.send_observation(ll_reasoner_id=ll_reasoner, observation=Observation(observation_type='none', value=None))
-        return outbox
+    def message_all(state: PerceptorState) -> None:
+        for ll_reasoner in state.directory.ll_reasoning:
+            state.outbox.send_observation(ll_reasoner_id=ll_reasoner, observation=Observation(observation_type='none', value=None))
 
 
 class TestLearner(LearnerBase):
-    def step(self, state: State) -> Update:
+    def step(self, state: LearnerState) -> LearnerState:
         state.step_counter += 1
-        return state, self.message_all(state.directory)
-
-    def on_task(self, state: State, sender: str, task: Any, **kwargs) -> Update:
+        self.message_all(state)
         return state
 
-    def on_memories(self, state: State, sender: str, observations: Iterable[Observation], **kwargs) -> Update:
+    def on_task(self, state: LearnerState, sender: str, task: Any, **kwargs) -> LearnerState:
         return state
 
-    def on_model_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_memories(self, state: LearnerState, sender: str, observations: Iterable[Observation], **kwargs) -> LearnerState:
+        return state
+
+    def on_model_request(self, state: LearnerState, sender: str, **kwargs) -> LearnerState:
         return state
 
     @staticmethod
-    def message_all(directory: Directory) -> LearnerOutbox:
-        outbox = LearnerOutbox()
-        for memory in directory.memory:
-            outbox.request_memories(memory_id=memory)
-        for ll_reasoner in directory.ll_reasoning:
-            outbox.send_status(ll_reasoner_id=ll_reasoner, learning_status=None)
-            outbox.send_model(ll_reasoner_id=ll_reasoner, model=None)
-        return outbox
+    def message_all(state: LearnerState) -> None:
+        for memory in state.directory.memory:
+            state.outbox.request_memories(memory_id=memory)
+        for ll_reasoner in state.directory.ll_reasoning:
+            state.outbox.send_status(ll_reasoner_id=ll_reasoner, learning_status=None)
+            state.outbox.send_model(ll_reasoner_id=ll_reasoner, model=None)
 
 
 class TestKnowledge(KnowledgeBase):
-    def step(self, state: State) -> Update:
+    def step(self, state: KnowledgeState) -> KnowledgeState:
         state.step_counter += 1
-        return state, self.message_all(state.directory)
-
-    def on_belief_request(self, state: State, sender: str, **kwargs) -> Update:
+        self.message_all(state)
         return state
 
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+    def on_belief_request(self, state: KnowledgeState, sender: str, **kwargs) -> KnowledgeState:
+        return state
+
+    def on_belief_update(self, state: KnowledgeState, sender: str, beliefs: Iterable[Belief], **kwargs) -> KnowledgeState:
         return state
 
     @staticmethod
-    def message_all(directory: Directory) -> KnowledgeOutbox:
-        outbox = KnowledgeOutbox()
-        for hl_reasoner in directory.hl_reasoning:
-            outbox.send_beliefs(knowledge_id=hl_reasoner, beliefs=[])
-        for memory in directory.memory:
-            outbox.send_memories(memory_id=memory, beliefs=[])
-        return outbox
+    def message_all(state: KnowledgeState) -> None:
+        for hl_reasoner in state.directory.hl_reasoning:
+            state.outbox.send_beliefs(knowledge_id=hl_reasoner, beliefs=[])
+        for memory in state.directory.memory:
+            state.outbox.send_memories(memory_id=memory, beliefs=[])
 
 
 class TestHLReasoner(HLReasonerBase):
-    def step(self, state: State) -> Update:
+    def step(self, state: HLState) -> HLState:
         state.step_counter += 1
-        return state, self.message_all(state.directory)
-
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+        self.message_all(state)
         return state
 
-    def on_goal_update(self, state: State, sender: str, goals: Iterable[Goal], **kwargs) -> Update:
+    def on_belief_update(self, state: HLState, sender: str, beliefs: Iterable[Belief], **kwargs) -> HLState:
+        return state
+
+    def on_goal_update(self, state: HLState, sender: str, goals: Iterable[Goal], **kwargs) -> HLState:
         return state
 
     @staticmethod
-    def message_all(directory: Directory) -> HLOutbox:
-        outbox = HLOutbox()
-        for memory in directory.memory:
-            outbox.request_memories(memory_id=memory)
-        for actuator in directory.actuation:
-            outbox.request_action(actuator_id=actuator)
-        for knowledge in directory.knowledge:
-            outbox.request_beliefs(knowledge_id=knowledge)
-            outbox.send_beliefs(knowledge_id=knowledge, beliefs=[])
-        for goal_graph in directory.goals:
-            outbox.send_goals(goal_graph_id=goal_graph, goals=[])
-        return outbox
+    def message_all(state: HLState) -> None:
+        for memory in state.directory.memory:
+            state.outbox.request_memories(memory_id=memory)
+        for actuator in state.directory.actuation:
+            state.outbox.request_action(actuator_id=actuator)
+        for knowledge in state.directory.knowledge:
+            state.outbox.request_beliefs(knowledge_id=knowledge)
+            state.outbox.send_beliefs(knowledge_id=knowledge, beliefs=[])
+        for goal_graph in state.directory.goals:
+            state.outbox.send_goals(goal_graph_id=goal_graph, goals=[])
 
 
 class TestGoalGraph(GoalGraphBase):
-    def step(self, state: State) -> Update:
+    def step(self, state: GoalGraphState) -> GoalGraphState:
         state.step_counter += 1
-        return state, self.message_all(state.directory)
-
-    def on_goal_update(self, state: State, sender: str, goals: Iterable[Goal], **kwargs) -> Update:
+        self.message_all(state)
         return state
 
-    def on_goal_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_goal_update(self, state: GoalGraphState, sender: str, goals: Iterable[Goal], **kwargs) -> GoalGraphState:
+        return state
+
+    def on_goal_request(self, state: GoalGraphState, sender: str, **kwargs) -> GoalGraphState:
         return state
 
     @staticmethod
-    def message_all(directory: Directory) -> GoalGraphOutbox:
-        outbox = GoalGraphOutbox()
-        for hl_reasoner in directory.hl_reasoning:
-            outbox.send_goals(receiver=hl_reasoner, goals=[])
-        for ll_reasoner in directory.ll_reasoning:
-            outbox.send_goals(receiver=ll_reasoner, goals=[])
-        return outbox
+    def message_all(state: GoalGraphState) -> None:
+        for hl_reasoner in state.directory.hl_reasoning:
+            state.outbox.send_goals(receiver=hl_reasoner, goals=[])
+        for ll_reasoner in state.directory.ll_reasoning:
+            state.outbox.send_goals(receiver=ll_reasoner, goals=[])
 
 
 class TestMemory(MemoryBase):
-    def step(self, state: State) -> Update:
+    def step(self, state: MemoryState) -> MemoryState:
         state.step_counter += 1
-        return state, self.message_all(state.directory)
-
-    def on_belief_request(self, state: State, sender: str, **kwargs) -> Update:
+        self.message_all(state)
         return state
 
-    def on_belief_update(self, state: State, sender: str, beliefs: Iterable[Belief], **kwargs) -> Update:
+    def on_belief_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
         return state
 
-    def on_observation_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_belief_update(self, state: MemoryState, sender: str, beliefs: Iterable[Belief], **kwargs) -> MemoryState:
         return state
 
-    def on_observation_update(self, state: State, sender: str, observations: Iterable[Observation], **kwargs) -> Update:
+    def on_observation_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
+        return state
+
+    def on_observation_update(self, state: MemoryState, sender: str, observations: Iterable[Observation], **kwargs) -> MemoryState:
         return state
 
     @staticmethod
-    def message_all(directory: Directory) -> MemoryOutbox:
-        outbox = MemoryOutbox()
-        for hl_reasoner in directory.hl_reasoning:
-            outbox.send_beliefs(hl_reasoner_id=hl_reasoner, beliefs=[])
-        for learner in directory.learning:
-            outbox.send_observations(learner_id=learner, observations=[])
-        return outbox
+    def message_all(state: MemoryState) -> None:
+        for hl_reasoner in state.directory.hl_reasoning:
+            state.outbox.send_beliefs(hl_reasoner_id=hl_reasoner, beliefs=[])
+        for learner in state.directory.learning:
+            state.outbox.send_observations(learner_id=learner, observations=[])
 
 
 def get_module_results(agent_id: str, module_id: str, save_dir: Path, save_format: Literal['json', 'dill'] = 'json') -> int:

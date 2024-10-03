@@ -1,6 +1,5 @@
 from typing import ClassVar
 from mhagenta.utils import ModuleTypes, ConnType, Message, ActionStatus, Outbox, State
-from mhagenta.utils.common.typing import Update
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
 
 
@@ -12,10 +11,13 @@ class ActuatorOutbox(Outbox):
         self._add(ll_reasoner_id, ConnType.send, body)
 
 
+ActuatorState = State[ActuatorOutbox]
+
+
 class ActuatorBase(ModuleBase):
     module_type: ClassVar[str] = ModuleTypes.ACTUATOR
 
-    def on_request(self, state: State, sender: str, **kwargs) -> Update:
+    def on_request(self, state: ActuatorState, sender: str, **kwargs) -> ActuatorState:
         raise NotImplementedError()
 
 
@@ -40,10 +42,11 @@ class Actuator(MHAModule):
             global_params=global_params,
             base=base,
             out_id_channels=out_id_channels,
-            in_id_channel_callbacks=in_id_channels_callbacks
+            in_id_channel_callbacks=in_id_channels_callbacks,
+            outbox_cls=ActuatorOutbox
         )
 
-    def receive_request(self, sender: str, channel: str, msg: Message) -> Update:
+    def receive_request(self, sender: str, channel: str, msg: Message) -> ActuatorState:
         self.info(f'Received action request {msg.id} from {sender}. Processing...')
         update = self._base.on_request(self._state, sender=sender, **msg.body)
         self.debug(f'Finished processing action request {msg.id}!')

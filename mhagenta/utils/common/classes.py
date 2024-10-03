@@ -184,46 +184,6 @@ class Directory:
         return modules
 
 
-class State:
-    def __init__(self, agent_id: str, module_id: str, time_func: Callable[[], float], directory: Directory, **kwargs) -> None:
-        self._agent_id = agent_id
-        self._module_id = module_id
-        self._time_func = time_func
-        self._directory = directory
-
-        self._custom_fields = set(kwargs.keys())
-        self.__dict__.update(kwargs)
-
-    @property
-    def agent_id(self) -> str:
-        return self._agent_id
-
-    @property
-    def module_id(self) -> str:
-        return self._module_id
-
-    @property
-    def time(self) -> float:
-        return self._time_func()
-
-    @property
-    def directory(self) -> Directory:
-        return self._directory
-
-    def dump(self) -> dict[str, Any]:
-        return {field: self.__dict__[field] for field in self._custom_fields}
-
-    def load(self, **kwargs) -> None:
-        self._custom_fields.update(kwargs.keys())
-        self.__dict__.update(kwargs)
-
-    def __str__(self) -> str:
-        return str(self.dump())
-
-    def __repr__(self) -> str:
-        return str(self.dump())
-
-
 class Belief(BaseModel):
     predicate: str
     arguments: tuple[str]
@@ -392,6 +352,61 @@ class Outbox(ABC):
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def clear(self) -> None:
+        self._msgs.clear()
+        self._recipients = list()
+        self._next_recipient = -1
+        self._next_content = -1
+
+
+class State[T: Outbox]:
+    def __init__(self, agent_id: str, module_id: str, time_func: Callable[[], float], directory: Directory, outbox: T, **kwargs) -> None:
+        self._agent_id = agent_id
+        self._module_id = module_id
+        self._time_func = time_func
+        self._directory = directory
+
+        self._outbox = outbox
+
+        self._custom_fields = set(kwargs.keys())
+        self.__dict__.update(kwargs)
+
+    @property
+    def agent_id(self) -> str:
+        return self._agent_id
+
+    @property
+    def module_id(self) -> str:
+        return self._module_id
+
+    @property
+    def time(self) -> float:
+        return self._time_func()
+
+    @property
+    def directory(self) -> Directory:
+        return self._directory
+
+    @property
+    def outbox(self) -> T:
+        return self._outbox
+
+    def _clear_outbox(self) -> None:
+        self._outbox.clear()
+
+    def dump(self) -> dict[str, Any]:
+        return {field: self.__dict__[field] for field in self._custom_fields}
+
+    def load(self, **kwargs) -> None:
+        self._custom_fields.update(kwargs.keys())
+        self.__dict__.update(kwargs)
+
+    def __str__(self) -> str:
+        return str(self.dump())
+
+    def __repr__(self) -> str:
+        return str(self.dump())
 
 
 class ModuleTypes:

@@ -1,7 +1,8 @@
-from .goals import GoalGraph, GoalGraphBase, GoalGraphOutbox
-from .knowledge import Knowledge, KnowledgeBase, KnowledgeOutbox
-from .high_level_reasoner import HLReasoner, HLReasonerBase, HLOutbox
+from .goals import GoalGraph, GoalGraphBase, GoalGraphOutbox, GoalGraphState
+from .knowledge import Knowledge, KnowledgeBase, KnowledgeOutbox, KnowledgeState
+from .high_level_reasoner import HLReasoner, HLReasonerBase, HLOutbox, HLState
 
 
-__all__ = ['GoalGraph', 'Knowledge', 'HLReasoner', 'GoalGraphBase', 'KnowledgeBase', 'KnowledgeOutbox',
-           'HLReasonerBase', 'HLOutbox', 'GoalGraphOutbox']
+__all__ = ['GoalGraph', 'GoalGraphBase', 'GoalGraphOutbox', 'GoalGraphState',
+           'Knowledge', 'KnowledgeBase', 'KnowledgeOutbox', 'KnowledgeState',
+           'HLReasoner', 'HLReasonerBase', 'HLOutbox', 'HLState']

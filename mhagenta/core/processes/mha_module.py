@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from mhagenta.utils import AgentCmd, StatusReport, Message, Outbox, State, Directory
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT
-from mhagenta.utils.common.typing import MessageCallback, MsgProcessorCallback, Sender, Channel, Recipient, StepAction, Update
+from mhagenta.utils.common.typing import MessageCallback, MsgProcessorCallback, Sender, Channel, Recipient, StepAction
 from mhagenta.core.connection import ModuleMessenger, Connector
 
 
@@ -45,13 +45,13 @@ class ModuleBase:
         self.initial_state = initial_state
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
 
-    def step(self, state: State) -> Update:
+    def step(self, state: State) -> State:
         return state
 
     def on_init(self, **kwargs) -> None:
         pass
 
-    def on_first(self, state: State) -> Update:
+    def on_first(self, state: State) -> State:
         return state
 
     def on_last(self, state: State) -> State:
@@ -68,7 +68,8 @@ class MHAModule(MHAProcess):
                  global_params: GlobalParams,
                  base: ModuleBase,
                  out_id_channels: Iterable[tuple[Recipient, Channel]],
-                 in_id_channel_callbacks: Iterable[tuple[Sender, Channel, MessageCallback]]
+                 in_id_channel_callbacks: Iterable[tuple[Sender, Channel, MessageCallback]],
+                 outbox_cls: type[Outbox],
                  ) -> None:
         super().__init__(
             agent_id=global_params.agent_id,
@@ -87,11 +88,12 @@ class MHAModule(MHAProcess):
 
         if self._base.initial_state is None:
             self._base.initial_state = dict()
-        self._state = State(
+        self._state = State[outbox_cls](
             agent_id=global_params.agent_id,
             module_id=self._base.module_id,
             time_func=self._time.get_exec_time,
             directory=global_params.directory,
+            outbox=outbox_cls(),
             **self._base.initial_state)
         self._status_frequency = global_params.status_frequency
 
@@ -132,15 +134,6 @@ class MHAModule(MHAProcess):
             periodic=True,
             frequency=self._status_frequency
         )
-        # self._queue.push(
-        #     func=self.await_exec_start,
-        #     ts=self._time.agent,
-        #     priority=False,
-        #     periodic=True,
-        #     frequency=self._control_frequency,
-        #     stop_condition=self.await_start_cond
-        # )
-        # await self.await_exec_start()
 
     def _on_step_task(self) -> None:
         try:
@@ -245,20 +238,16 @@ class MHAModule(MHAProcess):
 
         return push_task
 
-    def _process_update(self, update: Update) -> None:
-        if isinstance(update, tuple):
-            state, outbox = update[0], update[1]
-        else:
-            state = update
-            outbox = None
-        self._state = state
-        if outbox:
-            self._process_outbox(outbox)
+    def _process_update(self, update: State) -> None:
+        self._state = update
+        if self._state.outbox:
+            self._process_outbox()
 
-    def _process_outbox(self, outbox: Outbox) -> None:
-        for receiver, performative, extension, content in outbox:
+    def _process_outbox(self) -> None:
+        for receiver, performative, extension, content in self._state.outbox:
             self.debug(f'SENDING {performative.capitalize()}{f"/{extension}" if extension else ""} TO {receiver}: {content}...')
             self._send(receiver, performative, extension, content)
+        self._state.outbox.clear()
 
     def _send(self, recipient: str, performative: str, extension: str, content: dict[str, Any]) -> None:
         channel = self.sender_channel(recipient, performative, extension)

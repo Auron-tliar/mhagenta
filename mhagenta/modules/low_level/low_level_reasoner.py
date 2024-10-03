@@ -1,7 +1,6 @@
 from typing import Any, Iterable, ClassVar
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Goal, Observation, ActionStatus, Belief, State
-from mhagenta.utils.common.typing import Update
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
 
 
@@ -43,22 +42,25 @@ class LLOutbox(Outbox):
         self._add(learner_id, ConnType.send, body)
 
 
+LLState = State[LLOutbox]
+
+
 class LLReasonerBase(ModuleBase):
     module_type: ClassVar[str] = ModuleTypes.LLREASONER
 
-    def on_observation(self, state: State, sender: str, observation: Observation, **kwargs) -> Update:
+    def on_observation(self, state: LLState, sender: str, observation: Observation, **kwargs) -> LLState:
         raise NotImplementedError()
 
-    def on_action_status(self, state: State, sender: str, action_status: ActionStatus, **kwargs) -> Update:
+    def on_action_status(self, state: LLState, sender: str, action_status: ActionStatus, **kwargs) -> LLState:
         raise NotImplementedError()
 
-    def on_goal_update(self, state: State, sender: str, goals: list[Goal], **kwargs) -> Update:
+    def on_goal_update(self, state: LLState, sender: str, goals: list[Goal], **kwargs) -> LLState:
         raise NotImplementedError()
 
-    def on_model(self, state: State, sender: str, model: Any, **kwargs) -> Update:
+    def on_model(self, state: LLState, sender: str, model: Any, **kwargs) -> LLState:
         raise NotImplementedError()
 
-    def on_learning_status(self, state: State, sender: str, learning_status: Any, **kwargs) -> Update:
+    def on_learning_status(self, state: LLState, sender: str, learning_status: Any, **kwargs) -> LLState:
         raise NotImplementedError()
 
 
@@ -101,38 +103,39 @@ class LLReasoner(MHAModule):
             global_params=global_params,
             base=base,
             out_id_channels=out_id_channels,
-            in_id_channel_callbacks=in_id_channels_callbacks
+            in_id_channel_callbacks=in_id_channels_callbacks,
+            outbox_cls=LLOutbox
         )
 
-    def _receive_observation(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_observation(self, sender: str, channel: str, msg: Message) -> LLState:
         self.info(f'Received observation {msg.id} from {sender}. Processing...')
         observation = msg.body.pop('observation')
         update = self._base.on_observation(state=self._state, sender=sender, observation=observation, **msg.body)
         self.debug(f'Finished processing observation {msg.id}!')
         return update
 
-    def _receive_action_status(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_action_status(self, sender: str, channel: str, msg: Message) -> LLState:
         self.info(f'Received action status {msg.id} from {sender}. Processing...')
         action_status = msg.body.pop('action_status')
         update = self._base.on_action_status(state=self._state, sender=sender, action_status=action_status, **msg.body)
         self.debug(f'Finished processing action status {msg.id}!')
         return update
 
-    def _receive_goals(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_goals(self, sender: str, channel: str, msg: Message) -> LLState:
         self.info(f'Received goal update {msg.id} from {sender}. Processing...')
         goals = msg.body.pop('goals')
         update = self._base.on_goal_update(state=self._state, sender=sender, goals=goals, **msg.body)
         self.debug(f'Finished processing goal update {msg.id}!')
         return update
 
-    def _receive_learning_status(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_learning_status(self, sender: str, channel: str, msg: Message) -> LLState:
         self.info(f'Received learning status {msg.id} from {sender}. Processing...')
         learning_status = msg.body.pop('learning_status')
         update = self._base.on_learning_status(state=self._state, sender=sender, learning_status=learning_status, **msg.body)
         self.debug(f'Finished processing learning status {msg.id}!')
         return update
 
-    def _receive_learner_model(self, sender: str, channel: str, msg: Message) -> Update:
+    def _receive_learner_model(self, sender: str, channel: str, msg: Message) -> LLState:
         self.info(f'Received learned model {msg.id} from {sender}. Processing...')
         model = msg.body.pop('model')
         update = self._base.on_model(state=self._state, sender=sender, model=model, **msg.body)
