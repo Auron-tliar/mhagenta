@@ -1,4 +1,4 @@
-ARG SRC_IMAGE="hagent-base"
+ARG SRC_IMAGE="mha-base"
 ARG SRC_VERSION="latest"
 FROM ${SRC_IMAGE}:${SRC_VERSION}
 LABEL authors="Dmitry Gnatyshak"
