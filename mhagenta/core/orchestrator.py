@@ -33,6 +33,7 @@ class AgentEntry:
     save_dir: Path | None = None
     image: Image | None = None
     container: Container | None = None
+    port_mapping: dict[str, int] | None = None
 
 
 class Orchestrator:
@@ -43,6 +44,7 @@ class Orchestrator:
                  save_dir: str | Path,
                  connector_cls: type[Connector] = RabbitMQConnector,
                  connector_kwargs: dict[str, Any] | None = None,
+                 port_mapping: dict[int, int] | None = None,
                  step_frequency: float = 1.,
                  status_frequency: float = 10,
                  control_frequency: float = -1.,
@@ -68,6 +70,8 @@ class Orchestrator:
 
         self._connector_cls = connector_cls if connector_cls else RabbitMQConnector
         self._connector_kwargs = connector_kwargs
+
+        self._port_mapping = port_mapping if port_mapping else {}
 
         self._step_frequency = step_frequency
         self._status_frequency = status_frequency
@@ -122,6 +126,7 @@ class Orchestrator:
                   exec_duration: float | None = None,
                   resume: bool | None = None,
                   log_level: int | None = None,
+                  port_mapping: dict[int, int] | None = None
                   ) -> None:
         kwargs = {
             'agent_id': agent_id,
@@ -149,8 +154,10 @@ class Orchestrator:
             'status_msg_format': self._status_msg_format
         }
 
+        ports = port_mapping if port_mapping else self._port_mapping
         self._agents[agent_id] = AgentEntry(
             agent_id=agent_id,
+            port_mapping={f'{k}/tcp': v for k, v in ports.items()},
             kwargs=kwargs
         )
         if self._task_group is not None:
@@ -261,7 +268,8 @@ class Orchestrator:
                                                              name=agent.agent_id,
                                                              volumes={
                                                                  str((agent.dir / "out").absolute()): {'bind': '/out', 'mode': 'rw'}
-                                                             })
+                                                             },
+                                                             ports=agent.port_mapping)
 
     async def run(self,
                   rabbitmq_image_name: str = 'mha-rabbitmq',
