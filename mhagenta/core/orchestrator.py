@@ -33,7 +33,7 @@ class AgentEntry:
     save_dir: Path | None = None
     image: Image | None = None
     container: Container | None = None
-    port_mapping: dict[str, int] | None = None
+    port_mapping: dict[int, int] | None = None
 
 
 class Orchestrator:
@@ -154,10 +154,10 @@ class Orchestrator:
             'status_msg_format': self._status_msg_format
         }
 
-        ports = port_mapping if port_mapping else self._port_mapping
+        # ports = port_mapping if port_mapping else self._port_mapping
         self._agents[agent_id] = AgentEntry(
             agent_id=agent_id,
-            port_mapping={f'{k}/tcp': v for k, v in ports.items()},
+            port_mapping=port_mapping if port_mapping else self._port_mapping,
             kwargs=kwargs
         )
         if self._task_group is not None:
@@ -187,25 +187,28 @@ class Orchestrator:
 
         print(f'===== BUILDING AGENT BASE IMAGE: {mha_base_image_name}:{version_tag} =====')
         if self._base_image is None:
-            build_dir = self._save_dir.absolute() / 'tmp/'
             try:
-                shutil.copytree(BASE_IMG_PATH, build_dir)
-                shutil.copytree(self._package_dir, build_dir / 'mhagenta')
+                self._base_image = self._docker_client.images.list(name=f'{mha_base_image_name}:{version_tag}')[0]
+            except IndexError:
+                build_dir = self._save_dir.absolute() / 'tmp/'
+                try:
+                    shutil.copytree(BASE_IMG_PATH, build_dir)
+                    shutil.copytree(self._package_dir, build_dir / 'mhagenta')
 
-                self._base_image, _ = (
-                    self._docker_client.images.build(path=str(build_dir),
-                                                     buildargs={
-                                                         'SRC_IMAGE': rabbitmq_image_name,
-                                                         'SRC_VERSION': version_tag
-                                                     },
-                                                     tag=f'{mha_base_image_name}:{version_tag}',
-                                                     rm=True,
-                                                     quiet=False
-                                                     ))
-            except Exception as ex:
+                    self._base_image, _ = (
+                        self._docker_client.images.build(path=str(build_dir),
+                                                         buildargs={
+                                                             'SRC_IMAGE': rabbitmq_image_name,
+                                                             'SRC_VERSION': version_tag
+                                                         },
+                                                         tag=f'{mha_base_image_name}:{version_tag}',
+                                                         rm=True,
+                                                         quiet=False
+                                                         ))
+                except Exception as ex:
+                    shutil.rmtree(build_dir)
+                    raise ex
                 shutil.rmtree(build_dir)
-                raise ex
-            shutil.rmtree(build_dir)
 
     def _docker_build_agent(self,
                             agent: AgentEntry,
@@ -269,6 +272,7 @@ class Orchestrator:
                                                              volumes={
                                                                  str((agent.dir / "out").absolute()): {'bind': '/out', 'mode': 'rw'}
                                                              },
+                                                             extra_hosts={'host.docker.internal': 'host-gateway'},
                                                              ports=agent.port_mapping)
 
     async def run(self,
