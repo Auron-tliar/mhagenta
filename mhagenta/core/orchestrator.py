@@ -227,8 +227,10 @@ class Orchestrator:
 
         build_dir = agent_dir / 'tmp/'
         shutil.copytree(AGENT_IMG_PATH, build_dir.absolute())
-        shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'agent_launcher.py', (build_dir / 'src/').absolute())
-        shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts/start.sh', (build_dir / 'src/').absolute())
+        (build_dir / 'src').mkdir(parents=True, exist_ok=True)
+        shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'agent_launcher.py', (build_dir / 'src' / 'agent_launcher.py').absolute())
+        (build_dir / 'src' / 'scripts').mkdir(exist_ok=True)
+        shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'start.sh', (build_dir / 'src' / 'scripts' / 'start.sh').absolute())
 
         if agent.kwargs['exec_start_time'] is None:
             agent.kwargs['exec_start_time'] = time.time()
@@ -238,7 +240,7 @@ class Orchestrator:
         if self._simulation_end_ts < end_estimate:
             self._simulation_end_ts = end_estimate
 
-        with open((build_dir / 'src/agent_params').absolute(), 'wb') as f:
+        with open((build_dir / 'src' / 'agent_params').absolute(), 'wb') as f:
             dill.dump(agent.kwargs, f, recurse=True)
 
         base_tag = self._base_image.tags[0].split(':')
