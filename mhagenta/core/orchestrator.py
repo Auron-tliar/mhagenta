@@ -229,8 +229,7 @@ class Orchestrator:
         shutil.copytree(AGENT_IMG_PATH, build_dir.absolute())
         (build_dir / 'src').mkdir(parents=True, exist_ok=True)
         shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'agent_launcher.py', (build_dir / 'src' / 'agent_launcher.py').absolute())
-        (build_dir / 'src' / 'scripts').mkdir(exist_ok=True)
-        shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'start.sh', (build_dir / 'src' / 'scripts' / 'start.sh').absolute())
+        shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'start.sh', (build_dir / 'src' / 'start.sh').absolute())
 
         if agent.kwargs['exec_start_time'] is None:
             agent.kwargs['exec_start_time'] = time.time()

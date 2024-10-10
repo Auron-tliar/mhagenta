@@ -44,6 +44,7 @@ class ModuleBase:
         self.module_id = module_id
         self.initial_state = initial_state
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
+        self._is_reactive = self._check_reactive()
 
     def step(self, state: State) -> State:
         return state
@@ -57,10 +58,13 @@ class ModuleBase:
     def on_last(self, state: State) -> State:
         return state
 
-    @property
-    def is_reactive(self) -> bool:
+    def _check_reactive(self) -> bool:
         source_class = getattr(self, 'step').__qualname__.partition('.')[0]
         return source_class == ModuleBase.__name__
+
+    @property
+    def is_reactive(self) -> bool:
+        return self._is_reactive
 
 
 class MHAModule(MHAProcess):
@@ -84,6 +88,7 @@ class MHAModule(MHAProcess):
         )
 
         self._base = base
+
         self._module_id = self._base.module_id
 
         if self._base.initial_state is None:
@@ -151,12 +156,13 @@ class MHAModule(MHAProcess):
 
     async def on_run(self) -> None:
         self._on_first_step()
-        self._queue.push(
-            func=self._on_step_task,
-            ts=self._time.agent,
-            periodic=True,
-            frequency=self._step_frequency
-        )
+        if not self._base.is_reactive:
+            self._queue.push(
+                func=self._on_step_task,
+                ts=self._time.agent,
+                periodic=True,
+                frequency=self._step_frequency
+            )
 
     def _on_first_step(self) -> None:
         try:
