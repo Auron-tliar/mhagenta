@@ -275,11 +275,11 @@ class Orchestrator:
                                                              extra_hosts={'host.docker.internal': 'host-gateway'},
                                                              ports=agent.port_mapping)
 
-    async def run(self,
-                  rabbitmq_image_name: str = 'mha-rabbitmq',
-                  hagent_base_image_name: str = 'mha-base',
-                  force_run: bool = False
-                  ):
+    async def arun(self,
+                   rabbitmq_image_name: str = 'mha-rabbitmq',
+                   hagent_base_image_name: str = 'mha-base',
+                   force_run: bool = False
+                   ):
         if self._base_image is None:
             self.docker_build_base(rabbitmq_image_name=rabbitmq_image_name,
                                    mha_base_image_name=hagent_base_image_name)
@@ -299,6 +299,17 @@ class Orchestrator:
         for agent in self._agents.values():
             agent.container.remove()
         print('===== EXECUTION FINISHED =====')
+
+    def run(self,
+            rabbitmq_image_name: str = 'mha-rabbitmq',
+            hagent_base_image_name: str = 'mha-base',
+            force_run: bool = False
+            ):
+        asyncio.run(self.arun(
+            rabbitmq_image_name=rabbitmq_image_name,
+            hagent_base_image_name=hagent_base_image_name,
+            force_run=force_run
+        ))
 
     @staticmethod
     def _agent_stopped(agent: AgentEntry) -> bool:

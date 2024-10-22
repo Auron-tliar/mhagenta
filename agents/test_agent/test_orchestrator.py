@@ -852,5 +852,5 @@ if __name__ == '__main__':
         ) for module_id in test_data.memory],
     )
 
-    asyncio.run(orchestrator.run(force_run=True))
+    asyncio.run(orchestrator.arun(force_run=True))
     check_results(agent_id='test_agent', save_dir=orchestrator[agent_id].save_dir, test_data=test_data)
