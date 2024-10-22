@@ -124,6 +124,7 @@ class Orchestrator:
                   hl_reasoners: Iterable[HLReasonerBase] | HLReasonerBase | None = None,
                   goal_graphs: Iterable[GoalGraphBase] | GoalGraphBase | None = None,
                   memory: Iterable[MemoryBase] | MemoryBase | None = None,
+                  num_copies: int = 1,
                   connector_cls: type[Connector] | None = None,
                   connector_kwargs: dict[str, Any] | None = None,
                   step_frequency: float | None = None,
@@ -166,6 +167,7 @@ class Orchestrator:
         self._agents[agent_id] = AgentEntry(
             agent_id=agent_id,
             port_mapping=port_mapping if port_mapping else self._port_mapping,
+            num_copies=num_copies,
             kwargs=kwargs
         )
         if self._task_group is not None:
@@ -175,7 +177,7 @@ class Orchestrator:
                    num_agents: int,
                    agent_id_base: str,
                    ):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def docker_build_base(self,
                           rabbitmq_image_name: str = 'mha-rabbitmq',
@@ -219,12 +221,9 @@ class Orchestrator:
                 shutil.rmtree(build_dir)
 
     def _docker_build_agent(self,
-                            agent: AgentEntry,
-                            version_tag: str | None = None
+                            agent: AgentEntry
                             ):
-        if version_tag is None:
-            version_tag = CONTAINER_VERSION
-        print(f'===== BUILDING AGENT IMAGE: {agent.agent_id}:{version_tag} =====')
+        print(f'===== BUILDING AGENT IMAGE: mhagent:{agent.agent_id} =====')
         agent_dir = self._save_dir.absolute() / agent.agent_id
         if self._force_run and agent_dir.exists():
             shutil.rmtree(agent_dir)
@@ -255,7 +254,7 @@ class Orchestrator:
                                                               'SRC_IMAGE': base_tag[0],
                                                               'SRC_VERSION': base_tag[1]
                                                           },
-                                                          tag=f'{agent.agent_id}:{version_tag}',
+                                                          tag=f'mhagent:{agent.agent_id}',
                                                           rm=True,
                                                           quiet=False
                                                           )
@@ -264,24 +263,37 @@ class Orchestrator:
     async def _run_agent(self,
                          agent: AgentEntry,
                          force_run: bool = False):
-        print(f'===== RUNNING AGENT IMAGE AS CONTAINER \"{agent.agent_id}\" =====')
-        try:
-            container = self._docker_client.containers.get(agent.agent_id)
-            if force_run:
-                container.remove(force=True)
+        if agent.num_copies == 1:
+            print(f'===== RUNNING AGENT IMAGE \"mhagent:{agent.agent_id}\" AS CONTAINER \"{agent.agent_id}\" =====')
+        else:
+            print(f'===== RUNNING AGENT IMAGE \"mhagent:{agent.agent_id}\" AS '
+                  f'{agent.num_copies} CONTAINERS \"{agent.agent_id}_#\" =====')
+        for i in range(agent.num_copies):
+            if agent.num_copies == 1:
+                agent_name = agent.agent_id
+                agent_dir = (agent.dir / "out").absolute()
             else:
-                raise NameError(f'Container {agent.agent_id} already exists')
-        except NotFound:
-            pass
+                agent_name = f'{agent.agent_id}_{i}'
+                agent_dir = (agent.dir / str(i) / "out").absolute()
 
-        agent.container = self._docker_client.containers.run(image=agent.image,
-                                                             detach=True,
-                                                             name=agent.agent_id,
-                                                             volumes={
-                                                                 str((agent.dir / "out").absolute()): {'bind': '/out', 'mode': 'rw'}
-                                                             },
-                                                             extra_hosts={'host.docker.internal': 'host-gateway'},
-                                                             ports=agent.port_mapping)
+            agent_dir.mkdir(parents=True)
+            try:
+                container = self._docker_client.containers.get(agent_name)
+                if force_run:
+                    container.remove(force=True)
+                else:
+                    raise NameError(f'Container {agent_name} already exists')
+            except NotFound:
+                pass
+
+            agent.container = self._docker_client.containers.run(image=agent.image,
+                                                                 detach=True,
+                                                                 name=agent_name,
+                                                                 volumes={
+                                                                     str(agent_dir): {'bind': '/out', 'mode': 'rw'}
+                                                                 },
+                                                                 extra_hosts={'host.docker.internal': 'host-gateway'},
+                                                                 ports=agent.port_mapping)
 
     async def arun(self,
                    rabbitmq_image_name: str = 'mha-rabbitmq',
