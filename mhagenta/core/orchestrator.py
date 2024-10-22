@@ -34,6 +34,7 @@ class AgentEntry:
     image: Image | None = None
     container: Container | None = None
     port_mapping: dict[int, int] | None = None
+    num_copies: int = 1
 
 
 class Orchestrator:
@@ -69,7 +70,14 @@ class Orchestrator:
         self._package_dir = str(Path(mhagenta.__file__).parent.absolute())
 
         self._connector_cls = connector_cls if connector_cls else RabbitMQConnector
-        self._connector_kwargs = connector_kwargs
+        if connector_kwargs is None and connector_cls == RabbitMQConnector:
+            self._connector_kwargs = {
+                'host': 'localhost',
+                'port': 5672,
+                'prefetch_count': 1
+            }
+        else:
+            self._connector_kwargs = connector_kwargs
 
         self._port_mapping = port_mapping if port_mapping else {}
 
