@@ -12,11 +12,6 @@ class LoggerExtras(BaseModel):
     exec_time: str
     tags: str
 
-    # def __init__(self, tags: str | list[str], **kwargs):
-    #     if isinstance(tags, list):
-    #         kwargs['tags'] = f'[{"][".join(tags)}]'
-    #     super().__init__(**kwargs)
-
 
 class ILogging(ABC):
     @property

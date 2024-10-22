@@ -1,4 +1,4 @@
-from .common import State, Belief, Goal, Observation, ActionStatus, ConnType, Message, Outbox, AgentCmd, StatusReport, ModuleTypes, LoggerExtras, ILogging, Directory
+from mhagenta.utils.common import State, Belief, Goal, Observation, ActionStatus, ConnType, Message, Outbox, AgentCmd, StatusReport, ModuleTypes, LoggerExtras, ILogging, Directory
 
 
 __all__ = [

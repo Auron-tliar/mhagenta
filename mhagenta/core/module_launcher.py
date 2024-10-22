@@ -1,11 +1,12 @@
+import asyncio
 import os
+from pathlib import Path
+from sys import argv, exit
+from typing import *
 
 import dill
-from sys import argv, exit
-from pathlib import Path
-import asyncio
-from typing import *
 from pydantic import BaseModel
+
 from mhagenta.modules import *
 from mhagenta.states import *
 from mhagenta.utils import ModuleTypes, Observation, ActionStatus

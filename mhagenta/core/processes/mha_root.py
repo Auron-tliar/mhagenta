@@ -1,16 +1,18 @@
-import time
-from typing import Any, Iterable, Literal
 import asyncio
-import sys
-import dill
-from pathlib import Path
 import logging
 import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any, Iterable, Literal
+
+import dill
+
 from mhagenta.utils import AgentCmd, StatusReport, Directory
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT
 from mhagenta.core.connection import RootMessenger, Connector
-from .process import MHAProcess
-from .mha_module import GlobalParams, ModuleBase
+from mhagenta.core.processes.process import MHAProcess
+from mhagenta.core.processes.mha_module import GlobalParams, ModuleBase
 from mhagenta.base import *
 
 

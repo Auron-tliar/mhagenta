@@ -1,9 +1,12 @@
+import logging
 from abc import ABC, abstractmethod
 from typing import Callable, Iterable
-import logging
-from mhagenta.utils.common import Message, MHABase, StatusReport, AgentCmd, ModuleTypes, AgentTime, LoggerExtras, DEFAULT_LOG_FORMAT
-from mhagenta.utils.common.typing import MsgProcessorCallback
+
 import dill
+
+from mhagenta.utils.common import Message, MHABase, StatusReport, AgentCmd, ModuleTypes, AgentTime, LoggerExtras, \
+    DEFAULT_LOG_FORMAT
+from mhagenta.utils.common.typing import MsgProcessorCallback
 
 
 class Connector(MHABase, ABC):

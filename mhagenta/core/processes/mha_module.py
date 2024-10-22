@@ -1,14 +1,15 @@
-import asyncio
 import json
-import dill
-from typing import Any, ClassVar, Iterable, Literal
-from .process import MHAProcess
-from pydantic import BaseModel, ConfigDict
 import logging
 from pathlib import Path
+from typing import Any, ClassVar, Iterable, Literal
+
+import dill
+from pydantic import BaseModel, ConfigDict
+
+from mhagenta.core.processes.process import MHAProcess
 from mhagenta.utils import AgentCmd, StatusReport, Message, Outbox, State, Directory
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT
-from mhagenta.utils.common.typing import MessageCallback, MsgProcessorCallback, Sender, Channel, Recipient, StepAction
+from mhagenta.utils.common.typing import MessageCallback, MsgProcessorCallback, Sender, Channel, Recipient
 from mhagenta.core.connection import ModuleMessenger, Connector
 
 

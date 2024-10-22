@@ -1,23 +1,22 @@
+import asyncio
 import functools
 import json
-import random
-from typing import Iterable, Callable
 import logging
-import pika
-import asyncio
-import dill
+from typing import Iterable, Callable
 
+import dill
+import pika
 from pika.adapters.asyncio_connection import AsyncioConnection
-from pika.exchange_type import ExchangeType
-from pika.spec import Basic, BasicProperties
 from pika.channel import Channel
-from pika.frame import Method
 from pika.exceptions import ConnectionClosed, ChannelClosed
+from pika.exchange_type import ExchangeType
+from pika.frame import Method
+from pika.spec import Basic, BasicProperties
 
 from mhagenta.utils.common.classes import ModuleTypes, AgentTime, MHABase, DEFAULT_LOG_FORMAT
 from mhagenta.utils import LoggerExtras, StatusReport, AgentCmd, Message
 from mhagenta.utils.common.typing import MsgProcessorCallback
-from .connector import Connector
+from mhagenta.core.connection.connector import Connector
 
 
 class RabbitMQAsyncioConsumer(MHABase):

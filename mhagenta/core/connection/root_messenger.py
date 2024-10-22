@@ -1,9 +1,10 @@
 import asyncio
 import logging
 from typing import Iterable, Callable
+
 from mhagenta.utils.common import MHABase, AgentTime, ModuleTypes, DEFAULT_LOG_FORMAT
-from .connector import Connector
-from mhagenta.utils import Message, AgentCmd, StatusReport, LoggerExtras
+from mhagenta.core.connection.connector import Connector
+from mhagenta.utils import AgentCmd, StatusReport, LoggerExtras
 
 
 class RootMessenger(MHABase):
