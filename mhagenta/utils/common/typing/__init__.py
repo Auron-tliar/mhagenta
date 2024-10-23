@@ -1,4 +1,4 @@
-from .typing import P, Sender, Recipient, Channel, StepAction, MessageCallback, MsgProcessorCallback
+from mhagenta.utils.common.typing.typing import Sender, Recipient, Channel, StepAction, MessageCallback, MsgProcessorCallback
 
 
-__all__ = ['P', 'Sender', 'Recipient', 'Channel', 'StepAction', 'MessageCallback', 'MsgProcessorCallback']
+__all__ = ['Sender', 'Recipient', 'Channel', 'StepAction', 'MessageCallback', 'MsgProcessorCallback']

@@ -10,8 +10,8 @@ from functools import total_ordering
 from types import NoneType
 from typing import Callable, Any, Self
 
-from mhagenta.utils.common.classes import MHABase, LoggerExtras, AgentTime
-from mhagenta.utils.common import DEFAULT_LOG_FORMAT
+from mhagenta.utils.common.classes import MHABase, AgentTime
+from mhagenta.utils.common import DEFAULT_LOG_FORMAT, LoggerExtras
 
 
 @total_ordering
