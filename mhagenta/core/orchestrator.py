@@ -62,7 +62,7 @@ class Orchestrator:
                  connector_kwargs: dict[str, Any] | None = None
                  ) -> None:
         """
-        Construction method for Orchestrator.
+        Constructor method for Orchestrator.
 
         Args:
             save_dir (str | Path): Root directory for storing agents' states, logs, and temporary files.

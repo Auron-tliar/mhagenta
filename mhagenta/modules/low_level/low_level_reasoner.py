@@ -5,37 +5,102 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class LLOutbox(Outbox):
-    def request_action(self, actuator_id: str = ModuleTypes.ACTUATOR, **kwargs) -> None:
+    """Internal communication outbox class for Low-level reasoner.
+
+    Used to store and process outgoing messages to other modules.
+
+    """
+    def request_action(self, actuator_id: str, **kwargs) -> None:
+        """Request an action from an actuator.
+
+        Args:
+            actuator_id (str): `module_id` of the actuator chosen to perform the action.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         self._add(actuator_id, ConnType.request, kwargs)
 
-    def request_observation(self, perceptor_id: str = ModuleTypes.PERCEPTOR, **kwargs) -> None:
+    def request_observation(self, perceptor_id: str, **kwargs) -> None:
+        """Request an observation from a perceptor.
+
+        Args:
+            perceptor_id (str): `module_id` of the selected perceptor.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         self._add(perceptor_id, ConnType.request, kwargs)
 
     def send_beliefs(self, knowledge_id: str, beliefs: Iterable[Belief], **kwargs) -> None:
+        """Send belief update to a knowledge model module.
+
+        Args:
+            knowledge_id (str): `module_id` of the relevant knowledge model module.
+            beliefs (Iterable[Belief]): a collection of beliefs to be sent.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         body = {'beliefs': beliefs}
         if kwargs:
             body.update(kwargs)
         self._add(knowledge_id, ConnType.send, body)
 
     def request_goals(self, goal_graph_id: str, **kwargs) -> None:
+        """Request new or updated goals from a goal graph.
+
+        Args:
+            goal_graph_id (str): `module_id` of the relevant goal graph.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         self._add(goal_graph_id, ConnType.request, kwargs)
 
     def send_goal_update(self, goal_graph_id: str, goals: Iterable[Goal], **kwargs) -> None:
+        """Update a goal graph on the goal statuses.
+
+        Args:
+            goal_graph_id (str): `module_id` of the relevant goal graph.
+            goals (Iterable[Goal]): collection of goals to report.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         body = {'goals': goals}
         if kwargs:
             body.update(kwargs)
         self._add(goal_graph_id, ConnType.send, body)
 
     def send_memories(self, memory_id: str, observations: Iterable[Any], **kwargs) -> None:
+        """Send new memories to a memory structure.
+
+        Args:
+            memory_id (str): `module_id` of the relevant memory structure.
+            observations (Iterable[Any]): collection of memories to send.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         body = {'observations': observations}
         if kwargs:
             body.update(kwargs)
         self._add(memory_id, ConnType.send, body)
 
     def request_model(self, learner_id: str, **kwargs) -> None:
+        """Request the current model from a learner.
+
+        Args:
+            learner_id (str): `module_id` of a learner training the required model.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         self._add(learner_id, ConnType.request, kwargs)
 
     def send_learner_task(self, learner_id: str, task: Any, **kwargs) -> None:
+        """Send a new or updated learning task to a learner.
+
+        Args:
+            learner_id (str): `module_id` of the relevant learner.
+            task (Any): an object specifying the learning task.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         body = {'task': task}
         if kwargs:
             body.update(kwargs)
@@ -46,22 +111,93 @@ LLState = State[LLOutbox]
 
 
 class LLReasonerBase(ModuleBase):
+    """Base class for defining Low-level reasoner behavior.
+
+    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    reactions to messages from other modules.
+
+    """
     module_type: ClassVar[str] = ModuleTypes.LLREASONER
 
     def on_observation(self, state: LLState, sender: str, observation: Observation, **kwargs) -> LLState:
-        raise NotImplementedError()
+        """Override to define low-level reasoner's reaction to receiving an observation object.
+
+        Args:
+            state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the Perceptor that sent the observation.
+            observation (Observation): received observation object.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            LLState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
     def on_action_status(self, state: LLState, sender: str, action_status: ActionStatus, **kwargs) -> LLState:
-        raise NotImplementedError()
+        """Override to define low-level reasoner's reaction to receiving an action status object.
+
+        Args:
+            state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the Actuator that sent the status report.
+            action_status (ActionStatus): received action status object.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            LLState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
     def on_goal_update(self, state: LLState, sender: str, goals: list[Goal], **kwargs) -> LLState:
-        raise NotImplementedError()
+        """Override to define low-level reasoner's reaction to receiving a goals update.
+
+        Args:
+            state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the Goal graph that sent the goal update.
+            goals (list[Goal]): received list of updated goals.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            LLState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
     def on_model(self, state: LLState, sender: str, model: Any, **kwargs) -> LLState:
-        raise NotImplementedError()
+        """Override to define low-level reasoner's reaction to receiving a learned model.
+
+        Args:
+            state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the learner that sent the model.
+            model (Any): received learned model object.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            LLState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
     def on_learning_status(self, state: LLState, sender: str, learning_status: Any, **kwargs) -> LLState:
-        raise NotImplementedError()
+        """Override to define low-level reasoner's reaction to receiving a learning status.
+
+        Args:
+            state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the learner that sent the learning status.
+            learning_status (Any): received learning status object.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            LLState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
 
 class LLReasoner(MHAModule):

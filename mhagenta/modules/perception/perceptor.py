@@ -4,7 +4,20 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class PerceptorOutbox(Outbox):
+    """Internal communication outbox class for Perceptor.
+
+    Used to store and process outgoing messages to other modules.
+
+    """
     def send_observation(self, ll_reasoner_id: str, observation: Observation, **kwargs) -> None:
+        """Sends an observation object to a low-level reasoner.
+
+        Args:
+            ll_reasoner_id (str): `module_id` of the low-level reasoner to send the observation to.
+            observation (Observation): observation object.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         body = {'observation': observation}
         if kwargs:
             body.update(kwargs)
@@ -15,10 +28,28 @@ PerceptorState = State[PerceptorOutbox]
 
 
 class PerceptorBase(ModuleBase):
+    """Base class for defining Perceptor behavior.
+
+    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    reactions to messages from other modules.
+
+    """
     module_type: ClassVar[str] = ModuleTypes.PERCEPTOR
 
     def on_request(self, state: PerceptorState, sender: str, **kwargs) -> PerceptorState:
-        raise NotImplementedError()
+        """Override to define perceptor's reaction to receiving an observation reqeust.
+
+        Args:
+            state (PerceptorState): Perceptor's internal state enriched with relevant runtime information and
+                functionality.
+            sender: `module_id` of the low-level reasoner that sent the request.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            PerceptorState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
 
 class Perceptor(MHAModule):

@@ -35,6 +35,9 @@ class GlobalParams(BaseModel):
 
 
 class ModuleBase:
+    """Base class for agent module definition. Contains templates for all basic functions defining module behaviour.
+
+    """
     module_type: ClassVar[str]
 
     def __init__(self,
@@ -42,21 +45,62 @@ class ModuleBase:
                  initial_state: dict[str, Any] | None = None,
                  init_kwargs: dict[str, Any] | None = None
                  ) -> None:
+        """ModuleBase constructor.
+
+        Args:
+            module_id (str): unique (in scope of an agent) ID of the module.
+            initial_state (dict[str, Any], optional): dictionary of fields and corresponding values to be inserted into
+                module's internal state at initialization. Later on can be accessed via State.field.
+            init_kwargs (dict[str, Any], optional): keyword arguments to be passed to the `on_init` method.
+        """
         self.module_id = module_id
         self.initial_state = initial_state
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
         self._is_reactive = self._check_reactive()
 
     def step(self, state: State) -> State:
+        """Base for module's step function. If not overridden, the module will NOT take periodic step actions.
+
+        Args:
+            state (State): module's internal state enriched with relevant runtime information and functionality.
+
+        Returns:
+            State: modified or unaltered internal state of the module.
+
+        """
         return state
 
     def on_init(self, **kwargs) -> None:
+        """Called after the module finished initializing
+
+        Args:
+            **kwargs: additional keyword arguments. Their values need to be passed to the module constructor.
+
+        """
         pass
 
     def on_first(self, state: State) -> State:
+        """Called right after agent's execution start, before the first call to the regular step function.
+
+        Args:
+            state: module's internal state enriched with relevant runtime information and functionality.
+
+        Returns:
+            State: modified or unaltered internal state of the module.
+
+        """
         return state
 
     def on_last(self, state: State) -> State:
+        """Called right after agent's execution stop is initiated, the last behavioral action module can take.
+
+        Args:
+            state: module's internal state enriched with relevant runtime information and functionality.
+
+        Returns:
+            State: modified or unaltered internal state of the module.
+
+        """
         return state
 
     def _check_reactive(self) -> bool:
@@ -65,6 +109,12 @@ class ModuleBase:
 
     @property
     def is_reactive(self) -> bool:
+        """Shows whether the module is reactive (i.e. if it has internal action loop or just reacts to communications).
+
+        Returns:
+            bool: True if the module is reactive, otherwise False.
+
+        """
         return self._is_reactive
 
 

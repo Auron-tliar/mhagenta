@@ -5,24 +5,68 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class GoalGraphOutbox(Outbox):
-    def send_goals(self, receiver: str, goals: Iterable[Goal], **kwargs) -> None:
+    """Internal communication outbox class for Goal graph.
+
+    Used to store and process outgoing messages to other modules.
+
+    """
+    def send_goals(self, receiver_id: str, goals: Iterable[Goal], **kwargs) -> None:
+        """Update a low-level or a high-level reasoner on new or modified goals and their statuses.
+
+        Args:
+            receiver_id (str): `module_id` of the relevant low-level or high-level reasoner.
+            goals (Iterable[Goal]): A collection of goals.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         body = {'goals': goals}
         if kwargs:
             body.update(kwargs)
-        self._add(receiver, ConnType.send, body)
+        self._add(receiver_id, ConnType.send, body)
 
 
 GoalGraphState = State[GoalGraphOutbox]
 
 
 class GoalGraphBase(ModuleBase):
+    """Base class for defining Goal graph behavior.
+
+    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    reactions to messages from other modules.
+
+    """
     module_type: ClassVar[str] = ModuleTypes.GOALGRAPH
 
     def on_goal_request(self, state: GoalGraphState, sender: str, **kwargs) -> GoalGraphState:
-        raise NotImplementedError()
+        """Override to define goal graph's reaction to receiving a goal request.
+
+        Args:
+            state (GoalGraphState): Goal graph's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the module (high-level or low-level reasoner) that sent the request.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            GoalGraphState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
     def on_goal_update(self, state: GoalGraphState, sender: str, goals: Iterable[Goal], **kwargs) -> GoalGraphState:
-        raise NotImplementedError()
+        """Override to define goal graph's reaction to receiving a goal update.
+
+        Args:
+            state (GoalGraphState): Goal graph's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the module (high-level or low-level reasoner) that sent the update.
+            goals (Iterable[Goal]): received collection of goals.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            GoalGraphState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
 
 class GoalGraph(MHAModule):

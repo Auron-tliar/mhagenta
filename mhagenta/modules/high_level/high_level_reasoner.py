@@ -5,22 +5,64 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class HLOutbox(Outbox):
+    """Internal communication outbox class for High-level reasoner.
+
+    Used to store and process outgoing messages to other modules.
+
+    """
     def request_beliefs(self, knowledge_id: str, **kwargs) -> None:
+        """Request beliefs from a knowledge model.
+
+        Args:
+            knowledge_id (str): `module_id` of the relevant knowledge model.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         self._add(knowledge_id, ConnType.request, kwargs)
 
     def request_memories(self, memory_id: str, **kwargs) -> None:
+        """Request memories of beliefs from a memory structure.
+
+        Args:
+            memory_id (str): `module_id` of the relevant memory structure.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         self._add(memory_id, ConnType.request, kwargs)
 
     def request_action(self, actuator_id: str, **kwargs) -> None:
+        """Request an action from an actuator.
+
+        Args:
+            actuator_id (str): `module_id` of the actuator chosen to perform the action.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         self._add(actuator_id, ConnType.request, kwargs)
 
     def send_beliefs(self, knowledge_id: str, beliefs: Iterable[Belief], **kwargs) -> None:
+        """Send new or updated beliefs to a knowledge model.
+
+        Args:
+            knowledge_id (str): `module_id` of the relevant knowledge model.
+            beliefs (Iterable[Belief]): a collection of beliefs to send.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         body = {'beliefs': beliefs}
         if kwargs:
             body.update(kwargs)
         self._add(knowledge_id, ConnType.send, body)
 
     def send_goals(self, goal_graph_id: str, goals: Iterable[Goal], **kwargs) -> None:
+        """Send new or updated goals to a goal graph.
+
+        Args:
+            goal_graph_id (str): `module_id` of the relevant goal graph.
+            goals (Iterable[Goal]): a collection of goals to send.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
         body = {'goals': goals}
         if kwargs:
             body.update(kwargs)
@@ -31,13 +73,45 @@ HLState = State[HLOutbox]
 
 
 class HLReasonerBase(ModuleBase):
+    """Base class for defining High-level reasoner behavior.
+
+    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    reactions to messages from other modules.
+
+    """
     module_type: ClassVar[str] = ModuleTypes.HLREASONER
 
     def on_belief_update(self, state: HLState, sender: str, beliefs: Iterable[Belief], **kwargs) -> HLState:
-        raise NotImplementedError()
+        """Override to define high-level reasoner's reaction to receiving a belief update.
+
+        Args:
+            state (HLState): High-level reasoner's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the Knowledge model that sent the update.
+            beliefs (Iterable[Belief]): received collection of beliefs.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            HLState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
     def on_goal_update(self, state: HLState, sender: str, goals: Iterable[Goal], **kwargs) -> HLState:
-        raise NotImplementedError()
+        """Override to define high-level reasoner's reaction to receiving a goal update.
+
+        Args:
+            state: High-level reasoner's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the goal graph that sent the update.
+            goals (Iterable[Goal]): received collection of goals.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            HLState: modified or unaltered internal state of the module.
+
+        """
+        return state
 
 
 class HLReasoner(MHAModule):

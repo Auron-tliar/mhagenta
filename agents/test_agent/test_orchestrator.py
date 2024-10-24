@@ -534,7 +534,7 @@ class TestKnowledge(KnowledgeBase, BaseAuxiliary):
     def message_all(self, state: KnowledgeState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for hl_reasoner in directory.hl_reasoning:
-            state.outbox.send_beliefs(knowledge_id=hl_reasoner, beliefs=[], signature=signature_gen(hl_reasoner))
+            state.outbox.send_beliefs(hl_reasoner_id=hl_reasoner, beliefs=[], signature=signature_gen(hl_reasoner))
         for memory in directory.memory:
             state.outbox.send_memories(memory_id=memory, beliefs=[], signature=signature_gen(memory))
 
@@ -577,9 +577,9 @@ class TestGoalGraph(GoalGraphBase, BaseAuxiliary):
     def message_all(self, state: GoalGraphState, directory: Directory, func_name: str) -> None:
         signature_gen = self._signature_gen_factory(self.module_id, func_name)
         for hl_reasoner in directory.hl_reasoning:
-            state.outbox.send_goals(receiver=hl_reasoner, goals=[], signature=signature_gen(hl_reasoner))
+            state.outbox.send_goals(receiver_id=hl_reasoner, goals=[], signature=signature_gen(hl_reasoner))
         for ll_reasoner in directory.ll_reasoning:
-            state.outbox.send_goals(receiver=ll_reasoner, goals=[], signature=signature_gen(ll_reasoner))
+            state.outbox.send_goals(receiver_id=ll_reasoner, goals=[], signature=signature_gen(ll_reasoner))
 
 
 class TestMemory(MemoryBase, BaseAuxiliary):

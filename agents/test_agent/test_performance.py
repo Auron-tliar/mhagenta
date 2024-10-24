@@ -215,7 +215,7 @@ class TestKnowledge(KnowledgeBase):
     @staticmethod
     def message_all(state: KnowledgeState) -> None:
         for hl_reasoner in state.directory.hl_reasoning:
-            state.outbox.send_beliefs(knowledge_id=hl_reasoner, beliefs=[])
+            state.outbox.send_beliefs(hl_reasoner_id=hl_reasoner, beliefs=[])
         for memory in state.directory.memory:
             state.outbox.send_memories(memory_id=memory, beliefs=[])
 
@@ -260,9 +260,9 @@ class TestGoalGraph(GoalGraphBase):
     @staticmethod
     def message_all(state: GoalGraphState) -> None:
         for hl_reasoner in state.directory.hl_reasoning:
-            state.outbox.send_goals(receiver=hl_reasoner, goals=[])
+            state.outbox.send_goals(receiver_id=hl_reasoner, goals=[])
         for ll_reasoner in state.directory.ll_reasoning:
-            state.outbox.send_goals(receiver=ll_reasoner, goals=[])
+            state.outbox.send_goals(receiver_id=ll_reasoner, goals=[])
 
 
 class TestMemory(MemoryBase):

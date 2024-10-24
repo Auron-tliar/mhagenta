@@ -51,8 +51,8 @@ class MHABase(ILogging, ABC):
 
 
 class AgentTime:
-    """
-    Utility class for getting timestamps for agent components.
+    """Utility class for getting timestamps for agent components.
+
     """
     def __init__(self, agent_start_ts: float, exec_start_ts: float | None = None, decimals: int = 4) -> None:
         self._agent_start_ts = agent_start_ts
@@ -62,41 +62,69 @@ class AgentTime:
 
     @property
     def system(self) -> float:
-        """float: System time (in seconds) as provided by `time` module."""
+        """System time in seconds.
+
+        Returns:
+            float: System time (in seconds) as provided by `time` module.
+
+        """
         return round(time.time(), self._decimals)
 
     @property
     def agent(self) -> float:
-        """float: Seconds since the agent was created (i.e. since the initialization of `MHARoot`)."""
+        """Agent time in seconds.
+
+        Returns:
+            float: Seconds since the agent was created (i.e. since the initialization of agent's root controller).
+
+        """
         return round(time.time() - self._agent_start_ts, self._decimals)
 
     @property
     def module(self) -> float:
-        """float: Seconds since the initializations of the current module."""
+        """Module time in seconds.
+
+        Returns:
+            float: Seconds since the initializations of the current module.
+        """
         return round(time.time() - self._module_start_ts, self._decimals)
 
     @property
     def exec(self) -> float | None:
-        """
-        float | None: Seconds since the synchronous start of agent execution. Is None if the module doesn't have the
-            information yet, or negative if the execution start is scheduled in the future.
+        """Execution time in seconds.
+
+        Returns:
+            float | None: Seconds since the synchronous start of agent execution. Is None if the module doesn't have
+            the information yet, or negative if the execution start is scheduled in the future.
          """
         return round(time.time() - self._agent_start_ts - self._exec_start_ts, self._decimals) if self._exec_start_ts is not None else None
 
     @property
     def agent_start_ts(self) -> float:
+        """Unix timestamp in seconds of when the synchronous agents execution start.
+
+        Returns:
+            float: Unix timestamp in seconds.
+
+        """
         return self._agent_start_ts
 
     @property
     def exec_start_ts(self) -> float | None:
+        """Unix timestamp in seconds of when this agent starts execution.
+
+        Returns:
+            float | None: Unix timestamp in seconds. None if not yet defined.
+
+        """
         return self._exec_start_ts
 
     def set_exec_start_ts(self, exec_start_ts: float) -> None:
         """
-        Pass the information on when the agent execution is scheduled to start.
+        Pass the information on when this agent execution is scheduled to start.
 
         Args:
-            exec_start_ts: system-level timestamp (in seconds) of agent's scheduled start time.
+            exec_start_ts: system-level Unix timestamp (in seconds) of agent's scheduled start time.
         """
         self._exec_start_ts = exec_start_ts
 
@@ -115,12 +143,22 @@ class AgentTime:
 
     @property
     def tuple(self) -> tuple[float, float, float, float | None]:
-        """tuple[float, float, float, float | None]: tuple of all four types of timestamps in order: system, agent,
-            module, execution"""
+        """Full time information as a tuple.
+
+        Returns:
+            tuple[float, float, float, float | None]: tuple of all four types of timestamps in order: system, agent,
+                module, execution
+
+        """
         return self.system, self.agent, self.module, self.exec
 
 
 class Directory:
+    """Directory of all module names and types for easier communication definition.
+
+    Created by the agent root controller.
+
+    """
     def __init__(self,
                  perception: Iterable[str] | str,
                  actuation: Iterable[str] | str,
@@ -142,34 +180,82 @@ class Directory:
 
     @property
     def perception(self) -> list[str]:
+        """List of Perceptor IDs.
+
+        Returns:
+            list[str]: List of `module_id`s of all the agent `Perceptor`s
+
+        """
         return self._perception
 
     @property
     def actuation(self) -> list[str]:
+        """List of Actuator IDs.
+
+        Returns:
+            list[str]: List of `module_id`s of all the agent `Actuator`s
+
+        """
         return self._actuation
 
     @property
     def ll_reasoning(self) -> list[str]:
+        """List of Low-level reasoner IDs.
+
+        Returns:
+            list[str]: List of `module_id`s of all the agent `LLReasoner`s
+
+        """
         return self._ll_reasoning
 
     @property
     def learning(self) -> list[str]:
+        """List of Learner IDs.
+
+        Returns:
+            list[str]: List of `module_id`s of all the agent `Learner`s
+
+        """
         return self._learning
 
     @property
     def knowledge(self) -> list[str]:
+        """List of Knowledge model IDs.
+
+        Returns:
+            list[str]: List of `module_id`s of all the agent `Knowledge`s
+
+        """
         return self._knowledge
 
     @property
     def hl_reasoning(self) -> list[str]:
+        """List of High-level reasoner IDs.
+
+        Returns:
+            list[str]: List of `module_id`s of all the agent `HLReasoner`s
+
+        """
         return self._hl_reasoning
 
     @property
     def goals(self) -> list[str]:
+        """List of Goal graph IDs.
+
+        Returns:
+            list[str]: List of `module_id`s of all the agent `goal_graph`s
+
+        """
         return self._goals
 
     @property
     def memory(self) -> list[str]:
+        """List of Memory structure IDs.
+
+        Returns:
+            list[str]: List of `module_id`s of all the agent `Memory`s
+
+        """
         return self._memory
 
     @staticmethod
@@ -184,23 +270,58 @@ class Directory:
 
 
 class Belief(BaseModel):
+    """Pydantic BaseModel-based dataclass for agent's beliefs.
+
+    Attributes:
+        predicate (str): predicate name.
+        arguments (tuple[str]): predicate's arguments.
+        misc (dict[str, Any]): keyword dictionary of additional relevant information.
+
+    """
     predicate: str
     arguments: tuple[str]
     misc: dict[str, Any]
 
     def __init__(self, predicate: str, arguments: tuple[str], **kwargs) -> None:
+        """Belief constructor.
+
+        Args:
+            predicate (str): predicate name.
+            arguments (tuple[str]): predicate's arguments.
+            **kwargs: keyword dictionary of additional relevant information passed to `misc`.
+        """
         super().__init__(predicate=predicate, arguments=arguments, misc=kwargs)
 
 
 class Goal(BaseModel):
+    """Pydantic BaseModel-based dataclass for agent's goals.
+
+    Attributes:
+        state (list[Belief]): Belief-based description of the goal state.
+        misc (dict[str, Any]): keyword dictionary of additional relevant information.
+
+    """
     state: list[Belief]
     misc: dict[str, Any]
 
     def __init__(self, state: list[Belief], **kwargs) -> None:
+        """Goal constructor.
+
+        Args:
+            state (list[Belief]: Belief-based description of the goal state.
+            **kwargs: keyword dictionary of additional relevant information passed to `misc`.
+        """
         super().__init__(state=state, misc=kwargs)
 
 
 class Observation(BaseModel):
+    """Pydantic BaseModel-based dataclass for agent's observations.
+
+    Attributes:
+        observation_type (str): type of the observation.
+        value (Any): observed object.
+
+    """
     observation_type: str
     value: Any
 
@@ -209,6 +330,12 @@ class Observation(BaseModel):
 
 
 class ActionStatus(BaseModel):
+    """Pydantic BaseModel-based dataclass for action statuses.
+
+    Attributes:
+        status (Any): execution status of the action.
+
+    """
     status: Any
 
 
@@ -360,6 +487,14 @@ class Outbox(ABC):
 
 
 class State[T: Outbox]:
+    """Container for module's internal state enriched with additional information and functionality.
+
+    State creation is handled by the agent's root controller. Can be used to access agent time, directory of agent
+    module IDs, and to send out messages to other modules.
+
+    T resolves to a module-specific outbox class for convenient hinting when sending messages to other modules.
+
+    """
     def __init__(self, agent_id: str, module_id: str, time_func: Callable[[], float], directory: Directory, outbox: T, **kwargs) -> None:
         self._agent_id = agent_id
         self._module_id = module_id
@@ -373,22 +508,52 @@ class State[T: Outbox]:
 
     @property
     def agent_id(self) -> str:
+        """Unique ID of the parent agent.
+
+        Returns:
+            str: agent_id specified at the agent's creation.
+
+        """
         return self._agent_id
 
     @property
     def module_id(self) -> str:
+        """Unique (within the scope of the parent agent) identifier of the current module.
+
+        Returns:
+            str: module_id specified in the module base object.
+
+        """
         return self._module_id
 
     @property
     def time(self) -> float:
+        """Agent's execution current time.
+
+        Returns:
+            float: time in seconds since the start of the agent's execution.
+
+        """
         return self._time_func()
 
     @property
     def directory(self) -> Directory:
+        """Agent's directory of module IDs.
+
+        Returns:
+            Directory: directory object containing information about agent's module types and IDs.
+
+        """
         return self._directory
 
     @property
     def outbox(self) -> T:
+        """Outbox object for this module. Use its methods to send messages to other modules.
+
+        Returns:
+            T: module-specific outbox object.
+
+        """
         return self._outbox
 
     def _clear_outbox(self) -> None:
