@@ -354,7 +354,7 @@ class Orchestrator:
                 agent_name = f'{agent.agent_id}_{i}'
                 agent_dir = (agent.dir / str(i) / "out").absolute()
 
-            agent_dir.mkdir(parents=True)
+            agent_dir.mkdir(parents=True, exist_ok=True)
             try:
                 container = self._docker_client.containers.get(agent_name)
                 if force_run:
@@ -367,6 +367,7 @@ class Orchestrator:
             agent.container = self._docker_client.containers.run(image=agent.image,
                                                                  detach=True,
                                                                  name=agent_name,
+                                                                 environment={"AGENT_ID": agent_name},
                                                                  volumes={
                                                                      str(agent_dir): {'bind': '/out', 'mode': 'rw'}
                                                                  },

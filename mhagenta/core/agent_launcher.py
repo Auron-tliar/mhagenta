@@ -1,5 +1,7 @@
+import os
 import dill
 import asyncio
+from typing import Any
 
 from mhagenta.core.processes import MHARoot
 from mhagenta.modules import *
@@ -11,8 +13,11 @@ from mhagenta.base import *
 
 async def main():
     with open('/agent/agent_params', 'rb') as f:
-        params = dill.load(f)
+        params: dict[str, Any] = dill.load(f)
 
+    id_override = os.environ.get('AGENT_ID')
+    if id_override is not None and id_override != '':
+        params['agent_id'] = os.environ.get('AGENT_ID')
     agent = MHARoot(**params)
     await agent.initialize()
     await agent.start()
