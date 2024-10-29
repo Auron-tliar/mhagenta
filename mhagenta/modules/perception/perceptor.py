@@ -9,6 +9,7 @@ class PerceptorOutbox(Outbox):
     Used to store and process outgoing messages to other modules.
 
     """
+
     def send_observation(self, ll_reasoner_id: str, observation: Observation, **kwargs) -> None:
         """Sends an observation object to a low-level reasoner.
 
@@ -28,9 +29,9 @@ PerceptorState = State[PerceptorOutbox]
 
 
 class PerceptorBase(ModuleBase):
-    """Base class for defining Perceptor behavior.
+    """Base class for defining Perceptor behavior (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behavior, override the empty bases functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """

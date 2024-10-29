@@ -11,7 +11,7 @@ from mhagenta.modules import *
 from mhagenta.states import *
 from mhagenta.utils import ModuleTypes, Observation, ActionStatus
 from mhagenta.core.processes import run_agent_module, MHAModule, ModuleBase, GlobalParams
-from mhagenta.base import *
+from mhagenta.bases import *
 
 
 class ModuleSet(BaseModel):
@@ -42,9 +42,9 @@ if __name__ == "__main__":
     module_name, params = params['class'], params['kwargs']
     module_data = MODULE_NAME_TO_CLASS[module_name]
     module_cls = module_data.module_cls
-    params['base'] = dill.loads(params['base'])  # module_data.base(**dill.loads(params['base']))
+    params['bases'] = dill.loads(params['bases'])  # module_data.bases(**dill.loads(params['bases']))
     params['global_params'] = GlobalParams(**params['global_params'])
 
     exit_reason = asyncio.run(run_agent_module(module_cls, **params))
 
-    print(f'Module {params["base"].module_id} exited, reason: {exit_reason}')
+    print(f'Module {params["bases"].module_id} exited, reason: {exit_reason}')

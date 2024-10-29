@@ -8,7 +8,7 @@ from mhagenta.modules import *
 from mhagenta.states import *
 from mhagenta.utils import ModuleTypes, Observation, ActionStatus
 from mhagenta.core.processes import run_agent_module, MHAModule, ModuleBase, GlobalParams
-from mhagenta.base import *
+from mhagenta.bases import *
 
 
 async def main():

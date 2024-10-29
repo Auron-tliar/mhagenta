@@ -35,7 +35,7 @@ class GlobalParams(BaseModel):
 
 
 class ModuleBase:
-    """Base class for agent module definition. Contains templates for all basic functions defining module behaviour.
+    """Base class for agent module definitions. Contains templates for all basic functions that define module behaviour.
 
     """
     module_type: ClassVar[str]

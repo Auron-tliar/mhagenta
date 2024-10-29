@@ -5,7 +5,8 @@ from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Callable, Self, Iterable
 from uuid import uuid4
 
-from pydantic import BaseModel
+# from pydantic import BaseModel
+from pydantic.dataclasses import dataclass
 
 from mhagenta.utils.common.logging import ILogging
 from mhagenta.utils.common.logging import DEFAULT_FORMAT as DEFAULT_LOG_FORMAT
@@ -156,7 +157,7 @@ class AgentTime:
 class Directory:
     """Directory of all module names and types for easier communication definition.
 
-    Created by the agent root controller.
+    Created by the agent's root controller.
 
     """
     def __init__(self,
@@ -180,7 +181,7 @@ class Directory:
 
     @property
     def perception(self) -> list[str]:
-        """List of Perceptor IDs.
+        """(Property) List of Perceptor IDs.
 
         Returns:
             list[str]: List of `module_id`s of all the agent `Perceptor`s
@@ -190,7 +191,7 @@ class Directory:
 
     @property
     def actuation(self) -> list[str]:
-        """List of Actuator IDs.
+        """(Property) List of Actuator IDs.
 
         Returns:
             list[str]: List of `module_id`s of all the agent `Actuator`s
@@ -200,7 +201,7 @@ class Directory:
 
     @property
     def ll_reasoning(self) -> list[str]:
-        """List of Low-level reasoner IDs.
+        """(Property) List of Low-level reasoner IDs.
 
         Returns:
             list[str]: List of `module_id`s of all the agent `LLReasoner`s
@@ -210,7 +211,7 @@ class Directory:
 
     @property
     def learning(self) -> list[str]:
-        """List of Learner IDs.
+        """(Property) List of Learner IDs.
 
         Returns:
             list[str]: List of `module_id`s of all the agent `Learner`s
@@ -220,7 +221,7 @@ class Directory:
 
     @property
     def knowledge(self) -> list[str]:
-        """List of Knowledge model IDs.
+        """(Property) List of Knowledge model IDs.
 
         Returns:
             list[str]: List of `module_id`s of all the agent `Knowledge`s
@@ -230,7 +231,7 @@ class Directory:
 
     @property
     def hl_reasoning(self) -> list[str]:
-        """List of High-level reasoner IDs.
+        """(Property) List of High-level reasoner IDs.
 
         Returns:
             list[str]: List of `module_id`s of all the agent `HLReasoner`s
@@ -240,7 +241,7 @@ class Directory:
 
     @property
     def goals(self) -> list[str]:
-        """List of Goal graph IDs.
+        """(Property) List of Goal graph IDs.
 
         Returns:
             list[str]: List of `module_id`s of all the agent `goal_graph`s
@@ -250,7 +251,7 @@ class Directory:
 
     @property
     def memory(self) -> list[str]:
-        """List of Memory structure IDs.
+        """(Property) List of Memory structure IDs.
 
         Returns:
             list[str]: List of `module_id`s of all the agent `Memory`s
@@ -269,8 +270,9 @@ class Directory:
         return modules
 
 
-class Belief(BaseModel):
-    """Pydantic BaseModel-based dataclass for agent's beliefs.
+@dataclass
+class Belief:
+    """Pydantic dataclass for agent's beliefs.
 
     Attributes:
         predicate (str): predicate name.
@@ -283,18 +285,12 @@ class Belief(BaseModel):
     misc: dict[str, Any]
 
     def __init__(self, predicate: str, arguments: tuple[str], **kwargs) -> None:
-        """Belief constructor.
-
-        Args:
-            predicate (str): predicate name.
-            arguments (tuple[str]): predicate's arguments.
-            **kwargs: keyword dictionary of additional relevant information passed to `misc`.
-        """
         super().__init__(predicate=predicate, arguments=arguments, misc=kwargs)
 
 
-class Goal(BaseModel):
-    """Pydantic BaseModel-based dataclass for agent's goals.
+@dataclass
+class Goal:
+    """Pydantic dataclass for agent's goals.
 
     Attributes:
         state (list[Belief]): Belief-based description of the goal state.
@@ -305,17 +301,12 @@ class Goal(BaseModel):
     misc: dict[str, Any]
 
     def __init__(self, state: list[Belief], **kwargs) -> None:
-        """Goal constructor.
-
-        Args:
-            state (list[Belief]: Belief-based description of the goal state.
-            **kwargs: keyword dictionary of additional relevant information passed to `misc`.
-        """
         super().__init__(state=state, misc=kwargs)
 
 
-class Observation(BaseModel):
-    """Pydantic BaseModel-based dataclass for agent's observations.
+@dataclass
+class Observation:
+    """Pydantic dataclass for agent's observations.
 
     Attributes:
         observation_type (str): type of the observation.
@@ -329,8 +320,9 @@ class Observation(BaseModel):
         return f'[{self.observation_type}] {self.value}'
 
 
-class ActionStatus(BaseModel):
-    """Pydantic BaseModel-based dataclass for action statuses.
+@dataclass
+class ActionStatus:
+    """Pydantic dataclass for action statuses.
 
     Attributes:
         status (Any): execution status of the action.
@@ -344,16 +336,23 @@ class ConnType:
     request = 'request'
 
 
-class AgentCmd(BaseModel):
+@dataclass
+class AgentCmd:
     START: ClassVar[str] = 'start'
     STOP: ClassVar[str] = 'stop'
 
     agent_id: str
     cmd: str
-    args: dict[str, Any] = dict()
+    args: dict[str, Any] | None = None
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        if self.args is None:
+            self.args = dict()
 
 
-class StatusReport(BaseModel):
+@dataclass
+class StatusReport:
     CREATED: ClassVar[str] = 'CREATED'
     READY: ClassVar[str] = 'READY'
     RUNNING: ClassVar[str] = 'RUNNING'
@@ -365,13 +364,19 @@ class StatusReport(BaseModel):
     module_id: str
     status: str
     ts: float
-    args: dict[str, Any] = dict()
+    args: dict[str, Any] | None = None
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        if self.args is None:
+            self.args = dict()
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}[{self.agent_id}.{self.module_id}]({self.status}, {self.ts}{f": {self.args}" if self.args else ""})'
 
 
-class MsgHeader(BaseModel):
+@dataclass
+class MsgHeader:
     uuid: bytes
     sender_id: str
     recipient_id: str
@@ -379,7 +384,8 @@ class MsgHeader(BaseModel):
     performative: str
 
 
-class Message(BaseModel):
+@dataclass
+class Message:
     short_uuid_format: ClassVar[bool] = True
 
     header: MsgHeader
@@ -422,15 +428,6 @@ class Message(BaseModel):
     @property
     def short_id(self) -> str:
         return self.header.uuid[-6:].hex()
-
-    def dict(self, *args, **kwargs) -> dict[str, Any]:
-        return {
-            'header': self.header.model_dump(),
-            'body': self.body
-        }
-
-    def model_dump(self, *args, **kwargs) -> dict:
-        return self.dict(*args, **kwargs)
 
 
 class Outbox(ABC):
@@ -521,7 +518,7 @@ class State[T: Outbox]:
         """Unique (within the scope of the parent agent) identifier of the current module.
 
         Returns:
-            str: module_id specified in the module base object.
+            str: module_id specified in the module bases object.
 
         """
         return self._module_id

@@ -13,7 +13,7 @@ from mhagenta.utils.common import DEFAULT_LOG_FORMAT
 from mhagenta.core.connection import RootMessenger, Connector
 from mhagenta.core.processes.process import MHAProcess
 from mhagenta.core.processes.mha_module import GlobalParams, ModuleBase
-from mhagenta.base import *
+from mhagenta.bases import *
 
 
 def initialize_module(
@@ -31,7 +31,7 @@ def initialize_module(
 
     kwargs = {
         'global_params': global_params.model_dump(),
-        'base': dill.dumps(base, recurse=True)
+        'bases': dill.dumps(base, recurse=True)
     }
 
     params = {

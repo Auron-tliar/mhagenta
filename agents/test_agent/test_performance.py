@@ -9,7 +9,7 @@ import asyncio
 from sys import argv
 
 from mhagenta import Observation, ActionStatus, Goal, Belief
-from mhagenta.base import *
+from mhagenta.bases import *
 from mhagenta.states import *
 from mhagenta.core.processes import MHARoot
 from mhagenta.core import RabbitMQConnector
