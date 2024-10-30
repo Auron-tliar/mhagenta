@@ -14,7 +14,7 @@ Full high-level model of MHAgentA modules and their interaction scheme is shown 
 each of them (including multiple instances of modules of the same type) or just a subset. Note that it is not necessary 
 to use all of these module types, as simplest behaviors can be implemented even with just one of them.
 
-![](docs/images/MHAgentA_modules.png)
+![](https://raw.githubusercontent.com/Auron-tliar/mhagenta/957ec749d5fba20b21b2ab1e353481aed530ea58/docs/images/MHAgentA_modules.png)
 
 There are 8 types of agent modules, defined by their role in the agent's internal communication scheme. Each module is
 run as a separate process communicating with others as necessary. Each of them can be purely reactive, or can have
