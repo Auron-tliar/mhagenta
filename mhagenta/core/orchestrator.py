@@ -94,7 +94,7 @@ class Orchestrator:
             status_msg_format (str, optional): Format of agent status messages for external monitoring. Defaults to
                 `[status_upd]::{}`
             connector_cls (type[Connector], optional, default=RabbitMQConnector): internal connector class that
-                implements communication between modules. MHAgentA agents use RabbitMQ-bases connectors by default.
+                implements communication between modules. MHAgentA agents use RabbitMQ-based connectors by default.
             connector_kwargs (dict[str, Any], optional): Additional keyword arguments for connector. For
                 RabbitMQConnector, the default parameters are: {`host`: 'localhost', `port`: 5672, `prefetch_count`: 1}.
         """
@@ -257,7 +257,7 @@ class Orchestrator:
 
     def _docker_build_base(self,
                            rabbitmq_image_name: str = 'mha-rabbitmq',
-                           mha_base_image_name: str = 'mha-bases',
+                           mha_base_image_name: str = 'mha-base',
                            version_tag: str | None = None
                            ) -> None:
         if version_tag is None:
@@ -292,7 +292,7 @@ class Orchestrator:
                                                          quiet=False
                                                          ))
                 except Exception as ex:
-                    shutil.rmtree(build_dir)
+                    shutil.rmtree(build_dir, ignore_errors=True)
                     raise ex
                 shutil.rmtree(build_dir)
 
@@ -376,14 +376,14 @@ class Orchestrator:
 
     async def arun(self,
                    rabbitmq_image_name: str = 'mha-rabbitmq',
-                   hagent_base_image_name: str = 'mha-bases',
+                   hagent_base_image_name: str = 'mha-base',
                    force_run: bool = False
                    ) -> None:
         """Run all the agents as an async method. Use in case you want to control the async task loop yourself.
 
         Args:
-            rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the bases MHAgentA RabbitMQ image.
-            hagent_base_image_name (str, optional, default='mha-bases'): The name of the bases MHAgentA agent image.:
+            rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the base MHAgentA RabbitMQ image.
+            hagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
@@ -415,14 +415,14 @@ class Orchestrator:
 
     def run(self,
             rabbitmq_image_name: str = 'mha-rabbitmq',
-            hagent_base_image_name: str = 'mha-bases',
+            hagent_base_image_name: str = 'mha-base',
             force_run: bool = False
             ) -> None:
         """Run all the agents.
 
         Args:
-            rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the bases MHAgentA RabbitMQ image.
-            hagent_base_image_name (str, optional, default='mha-bases'): The name of the bases MHAgentA agent image.:
+            rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the base MHAgentA RabbitMQ image.
+            hagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.

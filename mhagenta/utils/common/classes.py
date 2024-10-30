@@ -375,46 +375,44 @@ class StatusReport:
         return f'{self.__class__.__name__}[{self.agent_id}.{self.module_id}]({self.status}, {self.ts}{f": {self.args}" if self.args else ""})'
 
 
-@dataclass
-class MsgHeader:
-    uuid: bytes
-    sender_id: str
-    recipient_id: str
-    ts: float | str
-    performative: str
+# @dataclass
+# class MsgHeader:
+#     uuid: bytes
+#     sender_id: str
+#     recipient_id: str
+#     ts: float | str
+#     performative: str
 
 
 @dataclass
 class Message:
     short_uuid_format: ClassVar[bool] = True
 
-    header: MsgHeader
     body: Any | dict[str, Any]
+    sender_id: str
+    recipient_id: str
+    ts: float | str
+    performative: str
+    uuid: bytes = b''
 
     def __init__(self,
                  body: Any | dict[str, Any],
-                 sender_id: str = '',
-                 recipient_id: str = '',
-                 ts: float | str = '',
-                 performative: str = '',
-                 header: MsgHeader | None = None) -> None:
-        if header is None:
-            if not sender_id or not recipient_id or not ts:
-                raise ValueError('Missing message values!')
-            super().__init__(
-                header=MsgHeader(
-                    uuid=uuid4().bytes,
-                    sender_id=sender_id,
-                    recipient_id=recipient_id,
-                    ts=ts,
-                    performative=performative),
-                body=body)
-        else:
-            super().__init__(header=header, body=body)
+                 sender_id: str,
+                 recipient_id: str,
+                 ts: float | str,
+                 performative: str
+                 ) -> None:
+        super().__init__(
+            sender_id=sender_id,
+            recipient_id=recipient_id,
+            ts=ts,
+            performative=performative,
+            body=body)
+        self.uuid = uuid4().bytes
 
     def __str__(self) -> str:
-        return f'[{self.header.ts}][{self.header.sender_id}-->{self.header.recipient_id}]' \
-               f'{f"[{self.header.performative}]" if self.header.performative else ""} ' \
+        return f'[{self.ts}][{self.sender_id}-->{self.recipient_id}]' \
+               f'{f"[{self.performative}]" if self.performative else ""} ' \
                f'{self.body}'
 
     @property
@@ -423,11 +421,11 @@ class Message:
 
     @property
     def full_id(self) -> str:
-        return self.header.uuid.hex()
+        return self.uuid.hex()
 
     @property
     def short_id(self) -> str:
-        return self.header.uuid[-6:].hex()
+        return self.uuid[-6:].hex()
 
 
 class Outbox(ABC):
@@ -518,7 +516,7 @@ class State[T: Outbox]:
         """Unique (within the scope of the parent agent) identifier of the current module.
 
         Returns:
-            str: module_id specified in the module bases object.
+            str: module_id specified in the module base object.
 
         """
         return self._module_id

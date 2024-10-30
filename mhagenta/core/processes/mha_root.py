@@ -31,7 +31,7 @@ def initialize_module(
 
     kwargs = {
         'global_params': global_params.model_dump(),
-        'bases': dill.dumps(base, recurse=True)
+        'base': dill.dumps(base, recurse=True)
     }
 
     params = {

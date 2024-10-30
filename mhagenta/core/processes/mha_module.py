@@ -287,7 +287,7 @@ class MHAModule(MHAProcess):
                     raise ex
             self._queue.push(
                 func=on_msg_task,
-                ts=task_msg.header.ts,
+                ts=task_msg.ts,
                 sender=task_sender,
                 channel=task_channel,
                 msg=task_msg

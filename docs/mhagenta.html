@@ -204,7 +204,7 @@ agent with preexisting ID.</li>
 <li><strong>status_msg_format (str, optional):</strong>  Format of agent status messages for external monitoring. Defaults to
 <code>[status_upd]::{}</code></li>
 <li><strong>connector_cls (type[Connector], optional, default=RabbitMQConnector):</strong>  internal connector class that
-implements communication between modules. MHAgentA agents use RabbitMQ-bases connectors by default.</li>
+implements communication between modules. MHAgentA agents use RabbitMQ-based connectors by default.</li>
 <li><strong>connector_kwargs (dict[str, Any], optional):</strong>  Additional keyword arguments for connector. For
 RabbitMQConnector, the default parameters are: {<code>host</code>: 'localhost', <code>port</code>: 5672, <code>prefetch_count</code>: 1}.</li>
 </ul>
@@ -274,7 +274,7 @@ the Orchestrator's <code>connector_kwargs</code>.</li>
                                 <div class="attr function">
             
         <span class="def">async def</span>
-        <span class="name">arun</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">rabbitmq_image_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mha-rabbitmq&#39;</span>,</span><span class="param">	<span class="n">hagent_base_image_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mha-bases&#39;</span>,</span><span class="param">	<span class="n">force_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></span><span class="return-annotation">) -> <span class="kc">None</span>:</span></span>
+        <span class="name">arun</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">rabbitmq_image_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mha-rabbitmq&#39;</span>,</span><span class="param">	<span class="n">hagent_base_image_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mha-base&#39;</span>,</span><span class="param">	<span class="n">force_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></span><span class="return-annotation">) -> <span class="kc">None</span>:</span></span>
 
         
     </div>
@@ -285,8 +285,8 @@ the Orchestrator's <code>connector_kwargs</code>.</li>
 <h6 id="arguments">Arguments:</h6>
 
 <ul>
-<li><strong>rabbitmq_image_name (str, optional, default='mha-rabbitmq'):</strong>  The name of the bases MHAgentA RabbitMQ image.</li>
-<li><strong>hagent_base_image_name (str, optional, default='mha-bases'):</strong>  The name of the bases MHAgentA agent image.:</li>
+<li><strong>rabbitmq_image_name (str, optional, default='mha-rabbitmq'):</strong>  The name of the base MHAgentA RabbitMQ image.</li>
+<li><strong>hagent_base_image_name (str, optional, default='mha-base'):</strong>  The name of the base MHAgentA agent image.:</li>
 <li><strong>force_run (bool, optional, default=False):</strong>  In case containers with some of the specified agent IDs exist,
 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
 raised.</li>
@@ -305,7 +305,7 @@ raised.</li>
                                 <div class="attr function">
             
         <span class="def">def</span>
-        <span class="name">run</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">rabbitmq_image_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mha-rabbitmq&#39;</span>,</span><span class="param">	<span class="n">hagent_base_image_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mha-bases&#39;</span>,</span><span class="param">	<span class="n">force_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></span><span class="return-annotation">) -> <span class="kc">None</span>:</span></span>
+        <span class="name">run</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="bp">self</span>,</span><span class="param">	<span class="n">rabbitmq_image_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mha-rabbitmq&#39;</span>,</span><span class="param">	<span class="n">hagent_base_image_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mha-base&#39;</span>,</span><span class="param">	<span class="n">force_run</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></span><span class="return-annotation">) -> <span class="kc">None</span>:</span></span>
 
         
     </div>
@@ -316,8 +316,8 @@ raised.</li>
 <h6 id="arguments">Arguments:</h6>
 
 <ul>
-<li><strong>rabbitmq_image_name (str, optional, default='mha-rabbitmq'):</strong>  The name of the bases MHAgentA RabbitMQ image.</li>
-<li><strong>hagent_base_image_name (str, optional, default='mha-bases'):</strong>  The name of the bases MHAgentA agent image.:</li>
+<li><strong>rabbitmq_image_name (str, optional, default='mha-rabbitmq'):</strong>  The name of the base MHAgentA RabbitMQ image.</li>
+<li><strong>hagent_base_image_name (str, optional, default='mha-base'):</strong>  The name of the base MHAgentA agent image.:</li>
 <li><strong>force_run (bool, optional, default=False):</strong>  In case containers with some of the specified agent IDs exist,
 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
 raised.</li>
@@ -384,7 +384,7 @@ module IDs, and to send out messages to other modules.</p>
 <h6 id="returns">Returns:</h6>
 
 <blockquote>
-  <p>str: module_id specified in the module bases object.</p>
+  <p>str: module_id specified in the module base object.</p>
 </blockquote>
 </div>
 

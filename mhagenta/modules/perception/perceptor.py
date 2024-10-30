@@ -31,7 +31,7 @@ PerceptorState = State[PerceptorOutbox]
 class PerceptorBase(ModuleBase):
     """Base class for defining Perceptor behavior (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty bases functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
