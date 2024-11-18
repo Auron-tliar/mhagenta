@@ -2,7 +2,7 @@ import logging
 import sys
 import time
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Callable, Self, Iterable
+from typing import Any, ClassVar, Callable, Self, Iterable, Optional
 from uuid import uuid4
 
 # from pydantic import BaseModel
@@ -277,12 +277,12 @@ class Belief:
     Attributes:
         predicate (str): predicate name.
         arguments (Any | tuple[Any, ...]): predicate's arguments.
-        extras (dict[str, Any]): keyword dictionary of additional relevant information.
+        extras (dict[str, Any], optional): keyword dictionary of additional relevant information.
 
     """
     predicate: str
     arguments: Any | tuple[Any, ...]
-    extras: dict[str, Any]
+    extras: Optional[dict[str, Any]] = None
 
 
 @dataclass
