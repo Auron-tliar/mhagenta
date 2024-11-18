@@ -7,8 +7,5 @@ COPY src /agent/
 RUN mkdir -p /out/logs
 RUN mkdir -p /out/save
 
-RUN rabbitmq-server -detached
-RUN sleep 5
-
 ENTRYPOINT ["sh"]
 CMD ["/agent/start.sh"]
