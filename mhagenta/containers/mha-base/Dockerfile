@@ -3,4 +3,4 @@ ARG SRC_VERSION="latest"
 FROM ${SRC_IMAGE}:${SRC_VERSION}
 LABEL authors="Dmitry Gnatyshak"
 
-RUN pip install mhagenta~=1.0.2
+RUN pip install mhagenta
