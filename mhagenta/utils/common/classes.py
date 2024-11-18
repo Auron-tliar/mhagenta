@@ -276,12 +276,12 @@ class Belief:
 
     Attributes:
         predicate (str): predicate name.
-        arguments (tuple[str]): predicate's arguments.
+        arguments (Any | tuple[Any, ...]): predicate's arguments.
         misc (dict[str, Any]): keyword dictionary of additional relevant information.
 
     """
     predicate: str
-    arguments: tuple[str]
+    arguments: Any | tuple[Any, ...]
     misc: dict[str, Any]
 
     def __init__(self, predicate: str, arguments: tuple[str], **kwargs) -> None:
@@ -373,15 +373,6 @@ class StatusReport:
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}[{self.agent_id}.{self.module_id}]({self.status}, {self.ts}{f": {self.args}" if self.args else ""})'
-
-
-# @dataclass
-# class MsgHeader:
-#     uuid: bytes
-#     sender_id: str
-#     recipient_id: str
-#     ts: float | str
-#     performative: str
 
 
 @dataclass
