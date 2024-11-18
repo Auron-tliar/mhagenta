@@ -277,15 +277,12 @@ class Belief:
     Attributes:
         predicate (str): predicate name.
         arguments (Any | tuple[Any, ...]): predicate's arguments.
-        misc (dict[str, Any]): keyword dictionary of additional relevant information.
+        extras (dict[str, Any]): keyword dictionary of additional relevant information.
 
     """
     predicate: str
     arguments: Any | tuple[Any, ...]
-    misc: dict[str, Any]
-
-    def __init__(self, predicate: str, arguments: Any | tuple[Any, ...], **kwargs) -> None:
-        super().__init__(predicate=predicate, arguments=arguments, misc=kwargs)
+    extras: dict[str, Any]
 
 
 @dataclass
