@@ -295,7 +295,7 @@ class Goal:
 
     """
     state: list[Belief]
-    misc: dict[str, Any]
+    extras: Optional[dict[str, Any]] = None
 
     def __init__(self, state: list[Belief], **kwargs) -> None:
         super().__init__(state=state, misc=kwargs)
@@ -310,8 +310,8 @@ class Observation:
         value (Any): observed object.
 
     """
-    observation_type: str
     value: Any
+    observation_type: Optional[str] = 'Any'
 
     def __str__(self) -> str:
         return f'[{self.observation_type}] {self.value}'
