@@ -251,12 +251,13 @@ class MHAModule(MHAProcess):
         match cmd.cmd:
             case cmd.START:
                 self.info(f'Received {cmd.START} command (start ts: {cmd.args["start_ts"] if "start_ts" in cmd.args else "-"})')
-                self._time.set_exec_start_ts(cmd.args['start_ts'] if 'start_ts' in cmd.args else self._time.agent)
+                self._time.set_exec_start_ts(self._time.agent_start_ts +
+                                             cmd.args['start_ts'] if 'start_ts' in cmd.args else self._time.agent)
                 self._stop_time = cmd.args['start_ts'] + self._exec_duration
                 # self._stage = self.Stage.starting
                 self._queue.push(
                     func=self._run,
-                    ts=self._time.exec_start_ts,
+                    ts=self._time.exec_start_ts - self._time.agent_start_ts,
                     priority=True,
                     periodic=False
                 )
@@ -347,29 +348,6 @@ class MHAModule(MHAProcess):
     async def on_error(self, error: Exception) -> None:
         await super().on_error(error)
         self._report_status()
-
-    # def await_start_cond(self) -> bool:
-    #     if self._stage >= self.Stage.running:
-    #         return True
-    #
-    #     if self._time.exec is None:
-    #         return self._time.agent >= self._stop_time
-    #     else:
-    #         return self._time.exec >= 0
-    #
-    # async def await_exec_start(self) -> None:
-    #     if self._stage >= self.Stage.running:
-    #         return
-    #
-    #     if self._time.exec is not None and self._time.exec >= 0:
-    #         self._stage = self.Stage.running
-    #         if self._step_action is not None:
-    #             self._queue.push(
-    #                 func=self._on_step_task,
-    #                 ts=self._time.agent,
-    #                 periodic=True,
-    #                 frequency=self._step_frequency
-    #             )
 
     @staticmethod
     def channel_name(sender: str, recipient: str, conn_type: str, extension: str = '') -> str:

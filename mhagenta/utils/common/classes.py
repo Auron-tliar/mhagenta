@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Callable, Self, Iterable, Optional
 from uuid import uuid4
 
-# from pydantic import BaseModel
 from pydantic.dataclasses import dataclass
 
 from mhagenta.utils.common.logging import ILogging
@@ -98,7 +97,7 @@ class AgentTime:
             float | None: Seconds since the synchronous start of agent execution. Is None if the module doesn't have
             the information yet, or negative if the execution start is scheduled in the future.
          """
-        return round(time.time() - self._agent_start_ts - self._exec_start_ts, self._decimals) if self._exec_start_ts is not None else None
+        return round(time.time() - self._exec_start_ts, self._decimals) if self._exec_start_ts is not None else None
 
     @property
     def agent_start_ts(self) -> float:
@@ -374,7 +373,6 @@ class StatusReport:
 
 @dataclass
 class Message:
-    short_uuid_format: ClassVar[bool] = True
 
     body: Any | dict[str, Any]
     sender_id: str
@@ -382,6 +380,7 @@ class Message:
     ts: float | str
     performative: str
     uuid: bytes = b''
+    short_uuid_format: Optional[bool] = True
 
     def __init__(self,
                  body: Any | dict[str, Any],

@@ -132,9 +132,46 @@ class ExecQueue:
             return self._priority_queue[0][1]
         if self._queue and self._queue[0][0] < self._agent_time:
             return self._priority_queue[0][1]
-        return None
+        if self._priority_queue:
+            if self._queue:
+                if self._priority_queue[0][0] <= self._queue[0][0]:
+                    return self._priority_queue[0][1]
+                else:
+                    return self._queue[0][1]
+            else:
+                return self._priority_queue[0][1]
+        elif self._queue:
+            return self._queue[0][1]
+        else:
+            return None
 
-    def pop(self, priority: bool = False, stop: bool = False) -> Task | None:
+    @property
+    def pending(self) -> bool:
+        return ((self._priority_queue and self._priority_queue[0][0] < self._agent_time) or
+                (self._queue and self._queue[0][0] < self._agent_time))
+
+    # def pop(self, priority: bool = False, stop: bool = False) -> Task | None:
+    #     if self._priority_queue and self._priority_queue[0][0] < self._agent_time:
+    #         task: Task = heapq.heappop(self._priority_queue)[1]
+    #     elif not priority and self._queue and self._queue[0][0] < self._agent_time:
+    #         task: Task = heapq.heappop(self._queue)[1]
+    #     else:
+    #         return None
+    #
+    #     if task.periodic and not stop and not task.stop_check:
+    #         if task.priority:
+    #             heapq.heappush(self._priority_queue, self._periodic_add_task(task).queue_item)
+    #         else:
+    #             heapq.heappush(self._queue, self._periodic_add_task(task).queue_item)
+    #         # next_task = task.copy(task.ts + task.frequency)
+    #         # if task.priority:
+    #         #     heapq.heappush(self._priority_queue, next_task.queue_item)
+    #         # else:
+    #         #     heapq.heappush(self._queue, next_task.queue_item)
+    #
+    #     return task
+
+    def run_next(self, priority: bool = False, stop: bool = False) -> None:
         if self._priority_queue and self._priority_queue[0][0] < self._agent_time:
             task: Task = heapq.heappop(self._priority_queue)[1]
         elif not priority and self._queue and self._queue[0][0] < self._agent_time:
@@ -142,14 +179,14 @@ class ExecQueue:
         else:
             return None
 
+        task()
+
         if task.periodic and not stop and not task.stop_check:
-            next_task = task.copy(task.ts + task.frequency)
+            next_task = task.copy(max(task.ts + task.frequency, self._agent_time))
             if task.priority:
                 heapq.heappush(self._priority_queue, next_task.queue_item)
             else:
                 heapq.heappush(self._queue, next_task.queue_item)
-
-        return task
 
     def __len__(self) -> int:
         return len(self._queue) + len(self._priority_queue)
@@ -171,7 +208,7 @@ class ExecQueue:
         return max(0., min(priority_wait, regular_wait))
 
     @property
-    def pending(self) -> bool:
+    def scheduled(self) -> bool:
         return bool(self._queue) or bool(self._priority_queue)
 
     @property
@@ -186,6 +223,22 @@ class ExecQueue:
     @property
     def _agent_time(self) -> float:
         return time.time() - self._start_ts
+
+    def _periodic_add_task(self, task: Task) -> Task:
+        def add() -> None:
+            if task.stop_check:
+                return
+            next_task = task.copy(max(task.ts + task.frequency, self._agent_time))
+            if task.priority:
+                heapq.heappush(self._priority_queue, next_task.queue_item)
+            else:
+                heapq.heappush(self._queue, next_task.queue_item)
+        return Task(
+            func=add,
+            ts=task.ts,
+            priority=task.priority,
+            periodic=False
+        )
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}(Priority: {self._priority_queue}, regular; {self._queue})'
@@ -307,16 +360,11 @@ class MHAProcess(MHABase, ABC):
                     await self.on_stage_change()
                 prev_stage = self._stage
 
-
-
-                # self.debug(self._queue)
-
-
-
-
-                task = self._queue.pop(priority=(self._stage != self.Stage.running))
-                if task is not None:
-                    task()
+                # if  self._queue.pending:
+                #     self.log(5, f'Executing task: {self._queue.peek()}. Queue length: {len(self._queue)}.')
+                self._queue.run_next(priority=(self._stage != self.Stage.running))
+                # if task is not None:
+                #     task()
 
                 # self._error_status = None
             except Exception as ex:

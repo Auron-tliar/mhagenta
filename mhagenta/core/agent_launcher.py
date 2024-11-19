@@ -2,6 +2,7 @@ import os
 import dill
 import asyncio
 from typing import Any
+import importlib.metadata
 
 from mhagenta.core.processes import MHARoot
 from mhagenta.modules import *
@@ -24,4 +25,5 @@ async def main():
 
 
 if __name__ == '__main__':
+    print(f'Using MHAgentA version {importlib.metadata.version("mhagenta")}')
     asyncio.run(main())

@@ -88,7 +88,7 @@ class MHARoot(MHAProcess):
         super().__init__(
             agent_id=agent_id,
             agent_start_time=time.time(),
-            exec_start_time=exec_start_time,
+            exec_start_time=None,
             init_timeout=60.,
             exec_duration=exec_duration,
             step_frequency=step_frequency,
@@ -97,6 +97,7 @@ class MHARoot(MHAProcess):
             log_level=log_level,
             log_format=log_format
         )
+        self._expected_start_time = exec_start_time
 
         self._directory = Directory(
             perception=self.extract_module_names(perceptors),
@@ -255,19 +256,25 @@ class MHARoot(MHAProcess):
         if not all([module.ready for module in self._modules.values()]):
             return
 
-        self._time.set_exec_start_ts(self._time.agent + delay)
-        self._stop_time = self._time.agent + delay + self._global_params.exec_duration
+        self._time.set_exec_start_ts(
+            max(
+                self._time.system,
+                self._expected_start_time + delay
+            ))
+        # self._stop_time = self._time.agent + delay + self._global_params.exec_duration
+        self._stop_time = self._time.exec_start_ts - self._time.agent_start_ts + self._global_params.exec_duration
+        self.debug(f'SYNCHRONOUS START! START TS: {self._time.exec_start_ts - self._time.agent_start_ts}, STOP_TS: {self._stop_time}')
         self.cmd(AgentCmd(
             agent_id=self._agent_id,
             cmd=AgentCmd.START,
-            args={'start_ts': self._time.agent + delay}
+            args={'start_ts': self._time.exec_start_ts - self._time.agent_start_ts}
         ))
-        self._queue.push(
-            func=self.stop_exec,
-            ts=self._stop_time,
-            priority=True,
-            periodic=False
-        )
+        # self._queue.push(
+        #     func=self.stop_exec,
+        #     ts=self._stop_time,
+        #     priority=True,
+        #     periodic=False
+        # )
 
     def stop_exec(self, reason: str = 'AGENT TIMEOUT CMD') -> None:
         if self._stop_sent:
@@ -301,9 +308,11 @@ class MHARoot(MHAProcess):
     def wait_for_module_process_term(self) -> None:
         for module in self._modules.values():
             if module.process.poll() is None:
-                module.process.wait(5.)
-                if module.process.poll() is None:
-                    module.process.kill()
+                try:
+                    module.process.wait(5.)
+                except subprocess.TimeoutExpired:
+                    if module.process.poll() is None:
+                        module.process.kill()
 
     async def on_error(self, error: Exception) -> None:
         await super().on_error(error)

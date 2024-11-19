@@ -46,7 +46,7 @@ class Orchestrator:
                  save_dir: str | Path,
                  port_mapping: dict[int, int] | None = None,
                  step_frequency: float = 1.,
-                 status_frequency: float = 10.,
+                 status_frequency: float = 5.,
                  control_frequency: float = -1.,
                  exec_start_time: float | None = None,
                  agent_start_delay: float = 5.,
@@ -59,7 +59,8 @@ class Orchestrator:
 
                  module_start_delay: float = 2.,
                  connector_cls: type[Connector] = RabbitMQConnector,
-                 connector_kwargs: dict[str, Any] | None = None
+                 connector_kwargs: dict[str, Any] | None = None,
+                 prerelease: bool = False
                  ) -> None:
         """
         Constructor method for Orchestrator.
@@ -97,6 +98,8 @@ class Orchestrator:
                 implements communication between modules. MHAgentA agents use RabbitMQ-based connectors by default.
             connector_kwargs (dict[str, Any], optional): Additional keyword arguments for connector. For
                 RabbitMQConnector, the default parameters are: {`host`: 'localhost', `port`: 5672, `prefetch_count`: 1}.
+            prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
+                version of mhagenta while building the container.
         """
         self._agents: dict[str, AgentEntry] = dict()
 
@@ -134,6 +137,8 @@ class Orchestrator:
         self._log_level = log_level
         self._log_format = log_format if log_format else DEFAULT_LOG_FORMAT
         self._status_msg_format = status_msg_format
+
+        self._prerelease = prerelease
 
         self._start_time: float = -1.
         self._simulation_end_ts = -1.
@@ -285,7 +290,8 @@ class Orchestrator:
                         self._docker_client.images.build(path=str(build_dir),
                                                          buildargs={
                                                              'SRC_IMAGE': rabbitmq_image_name,
-                                                             'SRC_VERSION': version_tag
+                                                             'SRC_VERSION': version_tag,
+                                                             'PRE_VERSION': "true" if self._prerelease else "false"
                                                          },
                                                          tag=f'{mha_base_image_name}:{version_tag}',
                                                          rm=True,
