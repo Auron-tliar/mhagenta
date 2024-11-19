@@ -1,9 +1,11 @@
 import logging
 import sys
 import time
+import uuid
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Callable, Self, Iterable, Optional
 from uuid import uuid4
+import dataclasses
 
 from pydantic.dataclasses import dataclass
 
@@ -379,8 +381,8 @@ class Message:
     recipient_id: str
     ts: float | str
     performative: str
-    uuid: bytes = b''
-    short_uuid_format: Optional[bool] = True
+    uuid: bytes = dataclasses.field(default_factory=lambda: uuid.uuid4())
+    short_uuid_format: bool = True
 
     def __init__(self,
                  body: Any | dict[str, Any],
@@ -412,7 +414,7 @@ class Message:
 
     @property
     def short_id(self) -> str:
-        return self.uuid[-6:].hex()
+        return self.uuid.bytes[-6:].hex()
 
 
 class Outbox(ABC):
