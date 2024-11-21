@@ -466,6 +466,8 @@ class Orchestrator:
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
+            gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
+                orchestrator.
 
         Raises:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
@@ -474,7 +476,8 @@ class Orchestrator:
         asyncio.run(self.arun(
             rabbitmq_image_name=rabbitmq_image_name,
             mhagent_base_image_name=hagent_base_image_name,
-            force_run=force_run
+            force_run=force_run,
+            gui=gui
         ))
 
     @staticmethod
