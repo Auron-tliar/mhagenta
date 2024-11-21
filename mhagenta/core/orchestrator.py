@@ -4,6 +4,7 @@ import shutil
 import time
 from asyncio import TaskGroup
 from dataclasses import dataclass
+from io import TextIOWrapper
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
@@ -19,6 +20,8 @@ from mhagenta.containers import *
 from mhagenta.core.connection import Connector, RabbitMQConnector
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT
 
+from mhagenta.gui import Monitor
+
 
 @dataclass
 class AgentEntry:
@@ -30,6 +33,29 @@ class AgentEntry:
     container: Container | None = None
     port_mapping: dict[int, int] | None = None
     num_copies: int = 1
+
+    @property
+    def module_ids(self) -> list[str]:
+        module_ids = []
+        keys = ('perceptors',
+                'actuators',
+                'll_reasoners',
+                'learners',
+                'knowledge',
+                'hl_reasoners',
+                'goal_graphs',
+                'memory')
+        for key in keys:
+            if self.kwargs[key] is None:
+                continue
+            if isinstance(self.kwargs[key], Iterable):
+                for module in self.kwargs[key]:
+                    module_ids.append(module.module_id)
+            else:
+                module_ids.append(self.kwargs[key].module_id)
+        return module_ids
+
+
 
 
 class Orchestrator:
@@ -56,11 +82,11 @@ class Orchestrator:
                  log_level: int = logging.INFO,
                  log_format: str | None = None,
                  status_msg_format: str = '[status_upd]::{}',
-
                  module_start_delay: float = 2.,
                  connector_cls: type[Connector] = RabbitMQConnector,
                  connector_kwargs: dict[str, Any] | None = None,
-                 prerelease: bool = False
+                 prerelease: bool = False,
+                 save_logs: bool = True
                  ) -> None:
         """
         Constructor method for Orchestrator.
@@ -100,6 +126,8 @@ class Orchestrator:
                 RabbitMQConnector, the default parameters are: {`host`: 'localhost', `port`: 5672, `prefetch_count`: 1}.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
                 version of mhagenta while building the container.
+            save_logs (bool, optional, default=True): Whether to save agent logs. If True, saves each agent's logs to
+                `<agent_id>.log` at the root of the `save_dir`. Defaults to True.
         """
         self._agents: dict[str, AgentEntry] = dict()
 
@@ -139,6 +167,7 @@ class Orchestrator:
         self._status_msg_format = status_msg_format
 
         self._prerelease = prerelease
+        self._save_logs = save_logs
 
         self._start_time: float = -1.
         self._simulation_end_ts = -1.
@@ -151,6 +180,8 @@ class Orchestrator:
         self._force_run = False
 
         self._docker_init()
+
+        self._monitor: Monitor | None = None
 
         self._running = False
         self._stopping = False
@@ -180,7 +211,8 @@ class Orchestrator:
                   log_level: int | None = None,
                   port_mapping: dict[int, int] | None = None,
                   connector_cls: type[Connector] | None = None,
-                  connector_kwargs: dict[str, Any] | None = None
+                  connector_kwargs: dict[str, Any] | None = None,
+                  save_logs: bool | None = None
                   ) -> None:
         """Define an agent model to be added to the execution.
 
@@ -223,6 +255,8 @@ class Orchestrator:
                 modules. Defaults to the Orchestrator's `connector_cls`.
             connector_kwargs (dict[str, Any], optional): Additional keyword arguments for connector. Defaults to
                 the Orchestrator's `connector_kwargs`.
+            save_logs (bool, optional): Whether to save agent logs. If True, saves the agent's logs to
+                `<agent_id>.log` at the root of the `save_dir`. Defaults to the orchestrator's `save_logs`.
 
         """
         kwargs = {
@@ -382,17 +416,20 @@ class Orchestrator:
 
     async def arun(self,
                    rabbitmq_image_name: str = 'mha-rabbitmq',
-                   hagent_base_image_name: str = 'mha-base',
-                   force_run: bool = False
+                   mhagent_base_image_name: str = 'mha-base',
+                   force_run: bool = False,
+                   gui: bool = False
                    ) -> None:
         """Run all the agents as an async method. Use in case you want to control the async task loop yourself.
 
         Args:
             rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the base MHAgentA RabbitMQ image.
-            hagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
+            mhagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
+            gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
+                orchestrator.
 
         Raises:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
@@ -400,20 +437,25 @@ class Orchestrator:
         """
         if self._base_image is None:
             self._docker_build_base(rabbitmq_image_name=rabbitmq_image_name,
-                                    mha_base_image_name=hagent_base_image_name)
+                                    mha_base_image_name=mhagent_base_image_name)
 
         self._force_run = force_run
         for agent in self._agents.values():
             self._docker_build_agent(agent)
 
+        if gui:
+            self._monitor = Monitor()
+
         self._running = True
         self._start_time = time.time()
         async with asyncio.TaskGroup() as tg:
             self._task_group = tg
+            if gui:
+                tg.create_task(self._monitor.run())
             for agent in self._agents.values():
                 tg.create_task(self._run_agent(agent, force_run=force_run))
                 tg.create_task(self._simulation_end_timer())
-                tg.create_task(self._read_logs(agent))
+                tg.create_task(self._read_logs(agent, gui))
         self._running = False
         for agent in self._agents.values():
             agent.container.remove()
@@ -421,17 +463,20 @@ class Orchestrator:
 
     def run(self,
             rabbitmq_image_name: str = 'mha-rabbitmq',
-            hagent_base_image_name: str = 'mha-base',
-            force_run: bool = False
+            mhagent_base_image_name: str = 'mha-base',
+            force_run: bool = False,
+            gui: bool = False
             ) -> None:
         """Run all the agents.
 
         Args:
             rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the base MHAgentA RabbitMQ image.
-            hagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
+            mhagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
+            gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
+                orchestrator.
 
         Raises:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
@@ -439,8 +484,9 @@ class Orchestrator:
         """
         asyncio.run(self.arun(
             rabbitmq_image_name=rabbitmq_image_name,
-            hagent_base_image_name=hagent_base_image_name,
-            force_run=force_run
+            mhagent_base_image_name=mhagent_base_image_name,
+            force_run=force_run,
+            gui=gui
         ))
 
     @staticmethod
@@ -462,19 +508,35 @@ class Orchestrator:
         await asyncio.sleep(self._simulation_end_ts - time.time())
         self._stopping = True
 
-    def _add_log(self, log: str | bytes) -> None:
+    def _add_log(self, log: str | bytes, gui: bool = False, file_stream: TextIOWrapper | None = None) -> None:
         if isinstance(log, bytes):
-            log = log.decode()
-        print(log.strip('\n\r'))
+            log = log.decode().strip('\n\r')
+        print(log)
+        if gui:
+            self._monitor.add_log(log)
+        if file_stream is not None:
+            file_stream.write(f'{log}\n')
+            file_stream.flush()
 
-    async def _read_logs(self, agent: AgentEntry) -> None:
+    async def _read_logs(self, agent: AgentEntry, gui: bool = False) -> None:
         logs = self._docker_client.containers.get(agent.container.id).logs(stdout=True, stderr=True, stream=True, follow=True)
+        if gui:
+            module_ids = agent.module_ids
+            module_ids.insert(0, 'root')
+            self._monitor.add_agent(agent.agent_id, module_ids)
 
+        if self._save_logs:
+            f = open(self._save_dir / f'{agent.agent_id}.log', 'w')
+        else:
+            f = None
         while True:
             if self._stopping and self._agents_stopped:
+                if f is not None:
+                    f.close()
                 break
             for line in logs:
-                self._add_log(line)
+                self._add_log(line, gui=gui, file_stream=f)
+                await asyncio.sleep(0)
             await asyncio.sleep(self.LOG_CHECK_FREQ)
 
     def __getitem__(self, agent_id: str) -> AgentEntry:
