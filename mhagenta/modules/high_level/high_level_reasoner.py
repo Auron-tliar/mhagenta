@@ -151,14 +151,14 @@ class HLReasoner(MHAModule):
         )
 
     def _receive_belief_update(self, sender: str, channel: str, msg: Message) -> HLState:
-        self.info(f'Received belief update {msg.id} from {sender}. Processing...')
+        self.debug(f'Received belief update {msg.id} from {sender}. Processing...')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_belief_update(state=self._state, sender=sender, beliefs=beliefs, **msg.body)
-        self.debug(f'Finished processing belief update {msg.id}!')
+        self.log(5, f'Finished processing belief update {msg.id}!')
         return update
 
     def _receive_goal_update(self, sender: str, channel: str, msg: Message) -> HLState:
-        self.info(f'Received goal update {msg.id} from {sender}. Processing...')
+        self.debug(f'Received goal update {msg.id} from {sender}. Processing...')
         update = self._base.on_goal_update(state=self._state, sender=sender, **msg.body)
-        self.debug(f'Finished processing goal update {msg.id}!')
+        self.log(5, f'Finished processing goal update {msg.id}!')
         return update

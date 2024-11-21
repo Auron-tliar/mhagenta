@@ -99,14 +99,14 @@ class GoalGraph(MHAModule):
         )
 
     def _receive_update(self, sender: str, channel: str, msg: Message) -> GoalGraphState:
-        self.info(f'Received goals update {msg.id} from {sender}. Processing...')
+        self.debug(f'Received goals update {msg.id} from {sender}. Processing...')
         goals = msg.body.pop('goals')
         update = self._base.on_goal_update(state=self._state, sender=sender, goals=goals, **msg.body)
-        self.debug(f'Finished processing goal request {msg.id}!')
+        self.log(5, f'Finished processing goal request {msg.id}!')
         return update
 
     def _receive_request(self, sender: str, channel: str, msg: Message) -> GoalGraphState:
-        self.info(f'Received goals request {msg.id} from {sender}. Processing...')
+        self.debug(f'Received goals request {msg.id} from {sender}. Processing...')
         update = self._base.on_goal_request(state=self._state, sender=sender, **msg.body)
-        self.debug(f'Finished processing goal request {msg.id}!')
+        self.log(5, f'Finished processing goal request {msg.id}!')
         return update

@@ -116,14 +116,14 @@ class Knowledge(MHAModule):
         )
 
     def _receive_beliefs(self, sender: str, channel: str, msg: Message) -> KnowledgeState:
-        self.info(f'Received belief update {msg.id} from {sender}. Processing...')
+        self.debug(f'Received belief update {msg.id} from {sender}. Processing...')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_belief_update(state=self._state, sender=sender, beliefs=beliefs, **msg.body)
-        self.debug(f'Finished processing belief update {msg.id}!')
+        self.log(5, f'Finished processing belief update {msg.id}!')
         return update
 
     def _receive_belief_request(self, sender: str, channel: str, msg: Message) -> KnowledgeState:
-        self.info(f'Received beliefs request {msg}. Processing...')
+        self.debug(f'Received beliefs request {msg}. Processing...')
         update = self._base.on_belief_request(state=self._state, sender=sender, **msg.body)
-        self.debug(f'Finished processing beliefs request {msg.id}!')
+        self.log(5, f'Finished processing beliefs request {msg.id}!')
         return update

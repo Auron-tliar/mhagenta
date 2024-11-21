@@ -149,27 +149,27 @@ class Memory(MHAModule):
         )
 
     def _receive_observations(self, sender: str, channel: str, msg: Message) -> MemoryState:
-        self.info(f'Received observation update {msg.id} from {sender}. Processing...')
+        self.debug(f'Received observation update {msg.id} from {sender}. Processing...')
         observations = msg.body.pop('observations')
         update = self._base.on_observation_update(state=self._state, sender=sender, observations=observations, **msg.body)
-        self.debug(f'Finished processing observation update {msg.id}!')
+        self.log(5, f'Finished processing observation update {msg.id}!')
         return update
 
     def _receive_beliefs(self, sender: str, channel: str, msg: Message) -> MemoryState:
-        self.info(f'Received belief update {msg.id} from {sender}. Processing...')
+        self.debug(f'Received belief update {msg.id} from {sender}. Processing...')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_belief_update(state=self._state, sender=sender, beliefs=beliefs, **msg.body)
-        self.debug(f'Finished processing belief update {msg.id}!')
+        self.log(5, f'Finished processing belief update {msg.id}!')
         return update
 
     def _receive_observation_request(self, sender: str, channel: str, msg: Message) -> MemoryState:
-        self.info(f'Received observation request {msg.id} from {sender}. Processing...')
+        self.debug(f'Received observation request {msg.id} from {sender}. Processing...')
         update = self._base.on_observation_request(state=self._state, sender=sender, **msg.body)
-        self.debug(f'Finished processing observation request {msg.id}!')
+        self.log(5, f'Finished processing observation request {msg.id}!')
         return update
 
     def _receive_belief_request(self, sender: str, channel: str, msg: Message) -> MemoryState:
-        self.info(f'Received belief request {msg.id} from {sender}. Processing...')
+        self.debug(f'Received belief request {msg.id} from {sender}. Processing...')
         update = self._base.on_belief_request(state=self._state, sender=sender, **msg.body)
-        self.debug(f'Finished processing belief request {msg.id}!')
+        self.log(5, f'Finished processing belief request {msg.id}!')
         return update

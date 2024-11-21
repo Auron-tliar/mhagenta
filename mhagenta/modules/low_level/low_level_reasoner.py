@@ -244,36 +244,36 @@ class LLReasoner(MHAModule):
         )
 
     def _receive_observation(self, sender: str, channel: str, msg: Message) -> LLState:
-        self.info(f'Received observation {msg.id} from {sender}. Processing...')
+        self.debug(f'Received observation {msg.id} from {sender}. Processing...')
         observation = msg.body.pop('observation')
         update = self._base.on_observation(state=self._state, sender=sender, observation=observation, **msg.body)
-        self.debug(f'Finished processing observation {msg.id}!')
+        self.log(5, f'Finished processing observation {msg.id}!')
         return update
 
     def _receive_action_status(self, sender: str, channel: str, msg: Message) -> LLState:
-        self.info(f'Received action status {msg.id} from {sender}. Processing...')
+        self.debug(f'Received action status {msg.id} from {sender}. Processing...')
         action_status = msg.body.pop('action_status')
         update = self._base.on_action_status(state=self._state, sender=sender, action_status=action_status, **msg.body)
-        self.debug(f'Finished processing action status {msg.id}!')
+        self.log(5, f'Finished processing action status {msg.id}!')
         return update
 
     def _receive_goals(self, sender: str, channel: str, msg: Message) -> LLState:
-        self.info(f'Received goal update {msg.id} from {sender}. Processing...')
+        self.debug(f'Received goal update {msg.id} from {sender}. Processing...')
         goals = msg.body.pop('goals')
         update = self._base.on_goal_update(state=self._state, sender=sender, goals=goals, **msg.body)
-        self.debug(f'Finished processing goal update {msg.id}!')
+        self.log(5, f'Finished processing goal update {msg.id}!')
         return update
 
     def _receive_learning_status(self, sender: str, channel: str, msg: Message) -> LLState:
-        self.info(f'Received learning status {msg.id} from {sender}. Processing...')
+        self.debug(f'Received learning status {msg.id} from {sender}. Processing...')
         learning_status = msg.body.pop('learning_status')
         update = self._base.on_learning_status(state=self._state, sender=sender, learning_status=learning_status, **msg.body)
-        self.debug(f'Finished processing learning status {msg.id}!')
+        self.log(5, f'Finished processing learning status {msg.id}!')
         return update
 
     def _receive_learner_model(self, sender: str, channel: str, msg: Message) -> LLState:
-        self.info(f'Received learned model {msg.id} from {sender}. Processing...')
+        self.debug(f'Received learned model {msg.id} from {sender}. Processing...')
         model = msg.body.pop('model')
         update = self._base.on_model(state=self._state, sender=sender, model=model, **msg.body)
-        self.debug(f'Finished processing learned model {msg.id}!')
+        self.log(5, f'Finished processing learned model {msg.id}!')
         return update
