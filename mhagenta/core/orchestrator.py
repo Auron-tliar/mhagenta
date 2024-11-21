@@ -45,6 +45,8 @@ class AgentEntry:
                 'goal_graphs',
                 'memory')
         for key in keys:
+            if key is None:
+                continue
             if isinstance(self.kwargs[key], Iterable):
                 for module in self.kwargs[key]:
                     module_ids.append(module.module_id)
