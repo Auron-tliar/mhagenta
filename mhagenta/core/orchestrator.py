@@ -45,7 +45,7 @@ class AgentEntry:
                 'goal_graphs',
                 'memory')
         for key in keys:
-            if key is None:
+            if self.kwargs[key] is None:
                 continue
             if isinstance(self.kwargs[key], Iterable):
                 for module in self.kwargs[key]:
