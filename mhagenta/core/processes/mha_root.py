@@ -165,7 +165,6 @@ class MHARoot(MHAProcess):
         self.debug('Messenger initialized!')
 
     async def on_start(self) -> None:
-        self.debug('On start')
         self._task_group.create_task(self._messenger.start())
         self._init_modules()
         self._queue.push(
@@ -244,7 +243,6 @@ class MHARoot(MHAProcess):
     def _init_modules(self) -> None:
         for module_id, module in self._modules.items():
             self.debug(f'Initializing module {module_id}...')
-            self.debug(module.base.module_id)
             module.process = initialize_module(
                 global_params=self._global_params,
                 base=module.base,
@@ -261,20 +259,13 @@ class MHARoot(MHAProcess):
                 self._time.system,
                 self._expected_start_time + delay
             ))
-        # self._stop_time = self._time.agent + delay + self._global_params.exec_duration
         self._stop_time = self._time.exec_start_ts - self._time.agent_start_ts + self._global_params.exec_duration
-        self.debug(f'SYNCHRONOUS START! START TS: {self._time.exec_start_ts - self._time.agent_start_ts}, STOP_TS: {self._stop_time}')
+        self.info('Starting execution!')
         self.cmd(AgentCmd(
             agent_id=self._agent_id,
             cmd=AgentCmd.START,
             args={'start_ts': self._time.exec_start_ts - self._time.agent_start_ts}
         ))
-        # self._queue.push(
-        #     func=self.stop_exec,
-        #     ts=self._stop_time,
-        #     priority=True,
-        #     periodic=False
-        # )
 
     def stop_exec(self, reason: str = 'AGENT TIMEOUT CMD') -> None:
         if self._stop_sent:

@@ -140,21 +140,21 @@ class Learner(MHAModule):
         )
 
     def _receive_task(self, sender: str, channel: str, msg: Message) -> LearnerState:
-        self.info(f'Received a new task {msg.id} from {sender}. Processing...')
+        self.debug(f'Received a new task {msg.id} from {sender}. Processing...')
         task = msg.body.pop('task')
         update = self._base.on_task(state=self._state, sender=sender, task=task, **msg.body)
-        self.debug(f'Finished processing the new task {msg.id}!')
+        self.log(5, f'Finished processing the new task {msg.id}!')
         return update
 
     def _receive_memories(self, sender: str, channel: str, msg: Message) -> LearnerState:
-        self.info(f'Received memories {msg.id} from {sender}. Processing...')
+        self.debug(f'Received memories {msg.id} from {sender}. Processing...')
         observations = msg.body.pop('observations')
         update = self._base.on_memories(state=self._state, sender=sender, observations=observations, **msg.body)
-        self.debug(f'Finished processing memories {msg.id}!')
+        self.log(5, f'Finished processing memories {msg.id}!')
         return update
 
     def _receive_model_request(self, sender: str, channel: str, msg: Message) -> LearnerState:
-        self.info(f'Received a model request {msg.id} from {sender}. Processing...')
+        self.debug(f'Received a model request {msg.id} from {sender}. Processing...')
         update = self._base.on_model_request(state=self._state, sender=sender, **msg.body)
-        self.debug(f'Finished processing the model request {msg.id}!')
+        self.log(5, f'Finished processing the model request {msg.id}!')
         return update

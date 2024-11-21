@@ -78,8 +78,8 @@ class Perceptor(MHAModule):
         )
 
     def receive_request(self, sender: str, channel: str, msg: Message) -> PerceptorState:
-        self.info(f'Received observation request {msg.id} from {sender}. Processing...')
+        self.debug(f'Received observation request {msg.id} from {sender}. Processing...')
         update = self._base.on_request(self._state, sender=sender, **msg.body)
-        self.debug(f'Finished processing observation request {msg.id}!')
+        self.log(5, f'Finished processing observation request {msg.id}!')
         return update
 
