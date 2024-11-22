@@ -44,7 +44,7 @@ class ModuleBase:
                  module_id: str,
                  initial_state: dict[str, Any] | None = None,
                  init_kwargs: dict[str, Any] | None = None,
-                 tags: Iterable[str] | None = None,
+                 tags: Iterable[str] | None = None
                  ) -> None:
         """ModuleBase constructor.
 
@@ -63,6 +63,8 @@ class ModuleBase:
         self._state_getter: Callable[[], State] = None
         self._state_setter: Callable[[State], None] = None
         self._log_func: Callable[[int, str], None] = None
+
+        self.extras: dict[str, Any] = dict()
 
     def step(self, state: State) -> State:
         """Base for module's step function. If not overridden, the module will NOT take periodic step actions.
