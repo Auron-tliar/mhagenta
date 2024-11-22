@@ -13,6 +13,19 @@ from mhagenta.utils.common.logging import ILogging
 from mhagenta.utils.common.logging import DEFAULT_FORMAT as DEFAULT_LOG_FORMAT
 
 
+class ModuleTypes:
+    AGENT = 'Agent'
+    ALL = 'All'
+    PERCEPTOR = 'Perceptor'
+    ACTUATOR = 'Actuator'
+    LLREASONER = 'LLReasoner'
+    LEARNER = 'Learner'
+    KNOWLEDGE = 'Knowledge'
+    HLREASONER = 'HLReasoner'
+    GOALGRAPH = 'GoalGraph'
+    MEMORY = 'Memory'
+
+
 class MHABase(ILogging, ABC):
     def __init__(self,
                  agent_id: str,
@@ -155,120 +168,204 @@ class AgentTime:
         return self.system, self.agent, self.module, self.exec
 
 
-class Directory:
-    """Directory of all module names and types for easier communication definition.
+class TagCard[T](ABC):
+    def __init__(self, tags: Iterable[T]) -> None:
+        self.tags: set[T] = set(tags)
+
+    def match(self, query: Iterable[T]) -> bool:
+        for tag in query:
+            if tag not in self.tags:
+                return False
+        return True
+
+    @property
+    @abstractmethod
+    def id(self) -> str:
+        pass
+
+class ICard(TagCard[str]):
+    def __init__(self, module_id: str, module_type: str, tags: Iterable[str] | None = None) -> None:
+        self.module_id = module_id
+        self.module_type = module_type
+        super().__init__(tags if tags is not None else tuple())
+
+    @property
+    def id(self) -> str:
+        return self.module_id
+
+
+class ECard(TagCard[str]):
+    def __init__(self, agent_id: str, address: Any, tags: Iterable[str] | None = None) -> None:
+        self.agent_id = agent_id
+        self.address = address
+        super().__init__(tags if tags is not None else tuple())
+
+    @property
+    def id(self) -> str:
+        return self.agent_id
+
+
+class BaseDirectory:
+    def __init__(self, content: Iterable[TagCard[str]] | None = None) -> None:
+        self._content = list(content) if content is not None else list()
+        self._by_id = {card.id: card for card in content} if content is not None else dict()
+
+    def __getitem__(self, item: str | int) -> TagCard[str]:
+        if isinstance(item, int):
+            return self._content[item]
+        else:
+            return self._by_id[item]
+
+    def search(self, tags: Iterable[str]) -> list[TagCard[str]]:
+        output = list()
+        for card in self._content:
+            if card.match(tags):
+                output.append(card)
+        return output
+
+    def _add(self, card: TagCard[str]) -> None:
+        self._content.append(card)
+        self._by_id[card.id] = card
+
+
+class IDirectory(BaseDirectory):
+    """Directory of all module names, types, and tags for easier communication definition.
 
     Created by the agent's root controller.
 
     """
-    def __init__(self,
-                 perception: Iterable[str] | str,
-                 actuation: Iterable[str] | str,
-                 ll_reasoning: Iterable[str] | str,
-                 learning: Iterable[str] | str | None = None,
-                 knowledge: Iterable[str] | str | None = None,
-                 hl_reasoning: Iterable[str] | str | None = None,
-                 goals: Iterable[str] | str | None = None,
-                 memory: Iterable[str] | str | None = None
-                 ) -> None:
-        self._perception = self._process_modules(perception)
-        self._actuation = self._process_modules(actuation)
-        self._ll_reasoning = self._process_modules(ll_reasoning)
-        self._learning = self._process_modules(learning)
-        self._knowledge = self._process_modules(knowledge)
-        self._hl_reasoning = self._process_modules(hl_reasoning)
-        self._goals = self._process_modules(goals)
-        self._memory = self._process_modules(memory)
+    def __init__(self) -> None:
+        super().__init__()
+        self._by_type: dict[str, list[ICard]] = {
+            ModuleTypes.PERCEPTOR: list(),
+            ModuleTypes.ACTUATOR: list(),
+            ModuleTypes.LLREASONER: list(),
+            ModuleTypes.LEARNER: list(),
+            ModuleTypes.KNOWLEDGE: list(),
+            ModuleTypes.HLREASONER: list(),
+            ModuleTypes.GOALGRAPH: list(),
+            ModuleTypes.MEMORY: list()
+        }
 
     @property
-    def perception(self) -> list[str]:
-        """(Property) List of Perceptor IDs.
+    def perception(self) -> list[ICard]:
+        """(Property) List of Perceptor info cards.
 
         Returns:
-            list[str]: List of `module_id`s of all the agent `Perceptor`s
+            list[ICard]: List of `module_id`s of all the agent `Perceptor`s
 
         """
-        return self._perception
+        return self._by_type[ModuleTypes.PERCEPTOR]
 
     @property
-    def actuation(self) -> list[str]:
-        """(Property) List of Actuator IDs.
+    def actuation(self) -> list[ICard]:
+        """(Property) List of Actuator info cards.
 
         Returns:
-            list[str]: List of `module_id`s of all the agent `Actuator`s
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Actuator`s
 
         """
-        return self._actuation
+        return self._by_type[ModuleTypes.ACTUATOR]
 
     @property
-    def ll_reasoning(self) -> list[str]:
-        """(Property) List of Low-level reasoner IDs.
+    def ll_reasoning(self) -> list[ICard]:
+        """(Property) List of Low-level reasoner info cards.
 
         Returns:
-            list[str]: List of `module_id`s of all the agent `LLReasoner`s
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `LLReasoner`s
 
         """
-        return self._ll_reasoning
+        return self._by_type[ModuleTypes.LLREASONER]
 
     @property
-    def learning(self) -> list[str]:
-        """(Property) List of Learner IDs.
+    def learning(self) -> list[ICard]:
+        """(Property) List of Learner info cards.
 
         Returns:
-            list[str]: List of `module_id`s of all the agent `Learner`s
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Learner`s
 
         """
-        return self._learning
+        return self._by_type[ModuleTypes.LEARNER]
 
     @property
-    def knowledge(self) -> list[str]:
-        """(Property) List of Knowledge model IDs.
+    def knowledge(self) -> list[ICard]:
+        """(Property) List of Knowledge model info cards.
 
         Returns:
-            list[str]: List of `module_id`s of all the agent `Knowledge`s
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Knowledge`s
 
         """
-        return self._knowledge
+        return self._by_type[ModuleTypes.KNOWLEDGE]
 
     @property
-    def hl_reasoning(self) -> list[str]:
-        """(Property) List of High-level reasoner IDs.
+    def hl_reasoning(self) -> list[ICard]:
+        """(Property) List of High-level reasoner info cards.
 
         Returns:
-            list[str]: List of `module_id`s of all the agent `HLReasoner`s
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `HLReasoner`s
 
         """
-        return self._hl_reasoning
+        return self._by_type[ModuleTypes.HLREASONER]
 
     @property
-    def goals(self) -> list[str]:
-        """(Property) List of Goal graph IDs.
+    def goals(self) -> list[ICard]:
+        """(Property) List of Goal graph info cards.
 
         Returns:
-            list[str]: List of `module_id`s of all the agent `goal_graph`s
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `goal_graph`s
 
         """
-        return self._goals
+        return self._by_type[ModuleTypes.GOALGRAPH]
 
     @property
-    def memory(self) -> list[str]:
-        """(Property) List of Memory structure IDs.
+    def memory(self) -> list[ICard]:
+        """(Property) List of Memory structure info cards.
 
         Returns:
-            list[str]: List of `module_id`s of all the agent `Memory`s
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Memory`s
 
         """
-        return self._memory
+        return self._by_type[ModuleTypes.MEMORY]
 
-    @staticmethod
-    def _process_modules(module_ids: Iterable[str] | str | None) -> list[str]:
-        if isinstance(module_ids, Iterable):
-            modules = list(module_ids)
-        elif isinstance(module_ids, str):
-            modules = [module_ids]
-        else:
-            modules = []
-        return modules
+    def _add_module(self, module_id: str, module_type: str, tags: Iterable[str] | None = None) -> ICard:
+        card = ICard(module_id, module_type, tags)
+        self._add(card)
+        self._by_type[module_type].append(card)
+        return card
+
+
+class EDirectory(BaseDirectory):
+    ENVIRONMENT = 'environment'
+
+    def __init__(self, env_address: Any | None = None, env_tags: Iterable[str] | None = None) -> None:
+        if env_address is None:
+            super().__init__()
+            return
+
+        tags = [self.ENVIRONMENT]
+        if env_tags is not None:
+            tags.extend(env_tags)
+        env_card = ECard(self.ENVIRONMENT, env_address, tags)
+        super().__init__([env_card])
+
+    def add_agent(self, agent_id: str, address: Any, tags: Iterable[str] | None = None) -> ECard:
+        card = ECard(agent_id, address, tags)
+        self._add(card)
+        return card
+
+
+class Directory:
+    def __init__(self):
+        self._internal = IDirectory()
+        self._external = EDirectory()
+
+    @property
+    def internal(self) -> IDirectory:
+        return self._internal
+
+    @property
+    def external(self) -> EDirectory:
+        return self._external
 
 
 @dataclass
@@ -555,16 +652,3 @@ class State[T: Outbox]:
 
     def __repr__(self) -> str:
         return str(self.dump())
-
-
-class ModuleTypes:
-    AGENT = 'Agent'
-    ALL = 'All'
-    PERCEPTOR = 'Perceptor'
-    ACTUATOR = 'Actuator'
-    LLREASONER = 'LLReasoner'
-    LEARNER = 'Learner'
-    KNOWLEDGE = 'Knowledge'
-    HLREASONER = 'HLReasoner'
-    GOALGRAPH = 'GoalGraph'
-    MEMORY = 'Memory'

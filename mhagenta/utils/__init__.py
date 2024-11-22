@@ -4,5 +4,6 @@ from mhagenta.utils.common import State, Belief, Goal, Observation, ActionStatus
 __all__ = [
     'Outbox',
     'ConnType', 'Message', 'AgentCmd', 'StatusReport',
-    'State', 'Belief', 'Goal', 'Observation', 'ActionStatus', 'ModuleTypes', 'ModuleTypes', 'LoggerExtras', 'ILogging', 'Directory'
+    'State', 'Belief', 'Goal', 'Observation', 'ActionStatus', 'ModuleTypes', 'ModuleTypes', 'LoggerExtras', 'ILogging',
+    'Directory'
 ]

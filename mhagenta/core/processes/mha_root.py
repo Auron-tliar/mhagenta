@@ -8,7 +8,7 @@ from typing import Any, Iterable, Literal
 
 import dill
 
-from mhagenta.utils import AgentCmd, StatusReport, Directory
+from mhagenta.utils import AgentCmd, StatusReport, Directory, ModuleTypes
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT
 from mhagenta.core.connection import RootMessenger, Connector
 from mhagenta.core.processes.process import MHAProcess
@@ -99,16 +99,16 @@ class MHARoot(MHAProcess):
         )
         self._expected_start_time = exec_start_time
 
-        self._directory = Directory(
-            perception=self.extract_module_names(perceptors),
-            actuation=self.extract_module_names(actuators),
-            ll_reasoning=self.extract_module_names(ll_reasoners),
-            learning=self.extract_module_names(learners),
-            knowledge=self.extract_module_names(knowledge),
-            hl_reasoning=self.extract_module_names(hl_reasoners),
-            goals=self.extract_module_names(goal_graphs),
-            memory=self.extract_module_names(memory),
-        )
+        self._directory = Directory()
+        self._add_modules_to_directory(self._directory, ModuleTypes.PERCEPTOR, perceptors)
+        self._add_modules_to_directory(self._directory, ModuleTypes.ACTUATOR, actuators)
+        self._add_modules_to_directory(self._directory, ModuleTypes.LLREASONER, ll_reasoners)
+        self._add_modules_to_directory(self._directory, ModuleTypes.LEARNER, learners)
+        self._add_modules_to_directory(self._directory, ModuleTypes.KNOWLEDGE, knowledge)
+        self._add_modules_to_directory(self._directory, ModuleTypes.HLREASONER, hl_reasoners)
+        self._add_modules_to_directory(self._directory, ModuleTypes.GOALGRAPH, goal_graphs)
+        self._add_modules_to_directory(self._directory, ModuleTypes.MEMORY, memory)
+
         self._status_msg_format = status_msg_format
         self._modules: dict[str, MHARoot.ModuleData] = dict()
 
@@ -318,6 +318,13 @@ class MHARoot(MHAProcess):
             return [modules.module_id]
 
         return [module.module_id for module in modules]
+
+    @classmethod
+    def _add_modules_to_directory(cls, directory: Directory, module_type: str, modules: Iterable[ModuleBase] | ModuleBase | None) -> None:
+        if modules is None:
+            return
+        for module in cls.extract_module_names(modules):
+            directory.internal._add_module(module, module_type)
 
     @property
     def agent_id(self) -> str:
