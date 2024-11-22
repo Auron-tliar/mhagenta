@@ -3,6 +3,7 @@ import logging
 import subprocess
 import sys
 import time
+from argparse import ArgumentError
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
@@ -63,9 +64,10 @@ class MHARoot(MHAProcess):
     def __init__(self,
                  agent_id: str,
                  connector_cls: type[Connector],
-                 perceptors: Iterable[PerceptorBase] | PerceptorBase,
-                 actuators: Iterable[ActuatorBase] | ActuatorBase,
-                 ll_reasoners: Iterable[LLReasonerBase] | LLReasonerBase,
+                 modules: Iterable[ModuleBase] | None = None,
+                 perceptors: Iterable[PerceptorBase] | PerceptorBase | None = None,
+                 actuators: Iterable[ActuatorBase] | ActuatorBase | None = None,
+                 ll_reasoners: Iterable[LLReasonerBase] | LLReasonerBase | None = None,
                  learners: Iterable[LearnerBase] | LearnerBase | None = None,
                  knowledge: Iterable[KnowledgeBase] | KnowledgeBase | None = None,
                  hl_reasoners: Iterable[HLReasonerBase] | HLReasonerBase | None = None,
@@ -99,15 +101,25 @@ class MHARoot(MHAProcess):
         )
         self._expected_start_time = exec_start_time
 
+        if modules is None:
+            modules: list[ModuleBase] = list()
+        else:
+            modules = list(modules)
+        self._extend_modules_list(modules, perceptors)
+        self._extend_modules_list(modules, actuators)
+        self._extend_modules_list(modules, ll_reasoners)
+        self._extend_modules_list(modules, learners)
+        self._extend_modules_list(modules, knowledge)
+        self._extend_modules_list(modules, hl_reasoners)
+        self._extend_modules_list(modules, goal_graphs)
+        self._extend_modules_list(modules, memory)
+
         self._directory = Directory()
-        self._add_modules_to_directory(self._directory, ModuleTypes.PERCEPTOR, perceptors)
-        self._add_modules_to_directory(self._directory, ModuleTypes.ACTUATOR, actuators)
-        self._add_modules_to_directory(self._directory, ModuleTypes.LLREASONER, ll_reasoners)
-        self._add_modules_to_directory(self._directory, ModuleTypes.LEARNER, learners)
-        self._add_modules_to_directory(self._directory, ModuleTypes.KNOWLEDGE, knowledge)
-        self._add_modules_to_directory(self._directory, ModuleTypes.HLREASONER, hl_reasoners)
-        self._add_modules_to_directory(self._directory, ModuleTypes.GOALGRAPH, goal_graphs)
-        self._add_modules_to_directory(self._directory, ModuleTypes.MEMORY, memory)
+        for module in modules:
+            self._directory.internal._add_module(module.module_id, module.module_type, module.tags)
+
+        if not modules:
+            raise ValueError('No modules specified!')
 
         self._status_msg_format = status_msg_format
         self._modules: dict[str, MHARoot.ModuleData] = dict()
@@ -150,14 +162,7 @@ class MHARoot(MHAProcess):
             **connector_kwargs
         )
 
-        self._add_modules(perceptors)
-        self._add_modules(actuators)
-        self._add_modules(ll_reasoners)
-        self._add_modules(learners)
-        self._add_modules(knowledge)
-        self._add_modules(hl_reasoners)
-        self._add_modules(goal_graphs)
-        self._add_modules(memory)
+        self._add_modules(modules)
 
     async def on_init(self) -> None:
         self.debug('Initializing messenger...')
@@ -310,21 +315,13 @@ class MHARoot(MHAProcess):
         self.error(self._format_exception(error))
 
     @staticmethod
-    def extract_module_names(modules: Iterable[ModuleBase] | ModuleBase | None) -> list[str] | None:
-        if modules is None:
-            return None
-
-        if isinstance(modules, ModuleBase):
-            return [modules.module_id]
-
-        return [module.module_id for module in modules]
-
-    @classmethod
-    def _add_modules_to_directory(cls, directory: Directory, module_type: str, modules: Iterable[ModuleBase] | ModuleBase | None) -> None:
-        if modules is None:
+    def _extend_modules_list(modules: list[ModuleBase], items: Iterable[ModuleBase] | ModuleBase | None) -> None:
+        if items is None:
             return
-        for module in cls.extract_module_names(modules):
-            directory.internal._add_module(module, module_type)
+        if isinstance(items, ModuleBase):
+            modules.append(items)
+        else:
+            modules.extend(items)
 
     @property
     def agent_id(self) -> str:
