@@ -333,6 +333,12 @@ class IDirectory(BaseDirectory):
         self._by_type[module_type].append(card)
         return card
 
+    def __getitem__(self, item: str | int) -> ICard:
+        return super().__getitem__(item)
+
+    def search(self, tags: Iterable[str]) -> list[ICard]:
+        return super().search(tags)
+
 
 class EDirectory(BaseDirectory):
     ENVIRONMENT = 'environment'
@@ -352,6 +358,16 @@ class EDirectory(BaseDirectory):
         card = ECard(agent_id, address, tags)
         self._add(card)
         return card
+
+    def __getitem__(self, item: str | int) -> ECard:
+        return super().__getitem__(item)
+
+    def search(self, tags: Iterable[str]) -> list[ECard]:
+        return super().search(tags)
+
+    @property
+    def environment(self) -> ECard | None:
+        return self[self.ENVIRONMENT] if self.ENVIRONMENT in self._by_id else None
 
 
 class Directory:
