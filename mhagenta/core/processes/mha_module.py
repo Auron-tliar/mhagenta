@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, ClassVar, Iterable, Literal
+from typing import Any, ClassVar, Iterable, Literal, Callable
 
 import dill
 from pydantic import BaseModel, ConfigDict
@@ -59,6 +59,9 @@ class ModuleBase:
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
         self.tags = tags
         self._is_reactive = self._check_reactive()
+        self._state_getter: Callable[[], State] = None
+        self._state_setter: Callable[[State], None] = None
+        self._log_func: Callable[[int, str], None] = None
 
     def step(self, state: State) -> State:
         """Base for module's step function. If not overridden, the module will NOT take periodic step actions.
@@ -119,6 +122,17 @@ class ModuleBase:
         """
         return self._is_reactive
 
+    @property
+    def state(self) -> State:
+        return self._state_getter()
+
+    @state.setter
+    def state(self, state: State) -> None:
+        self._state_setter(state)
+
+    def log(self, level: int, message: str) -> None:
+        self._log_func(level, message)
+
 
 class MHAModule(MHAProcess):
     def __init__(self,
@@ -141,6 +155,7 @@ class MHAModule(MHAProcess):
         )
 
         self._base = base
+        self._base._log_func = self.log
 
         self._module_id = self._base.module_id
 
@@ -153,6 +168,8 @@ class MHAModule(MHAProcess):
             directory=global_params.directory,
             outbox=outbox_cls(),
             **self._base.initial_state)
+        self._base._state_getter = lambda: self._state
+        self._base._state_setter = self._process_update
         self._status_frequency = global_params.status_frequency
 
         self._save_dir = global_params.save_dir
