@@ -57,7 +57,7 @@ class ModuleBase:
         self.module_id = module_id
         self.initial_state = initial_state
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
-        self.tags = tags
+        self.tags = tags if tags is not None else list()
         self._is_reactive = self._check_reactive()
         self._state_getter: Callable[[], State] = None
         self._state_setter: Callable[[State], None] = None
