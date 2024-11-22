@@ -1,4 +1,4 @@
-from mhagenta.defaults.communication.rest import RestReceiver, RestSender
+from mhagenta.defaults.communication.rest import RestReceiver, RestSender, RestPerceptor, RestActuator, RestEnvironmentBase
 
 
-__all__ = ['RestReceiver', 'RestSender']
+__all__ = ['RestReceiver', 'RestSender', 'RestPerceptor', 'RestActuator', 'RestEnvironmentBase']

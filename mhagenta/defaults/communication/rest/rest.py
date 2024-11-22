@@ -9,7 +9,7 @@ from mhagenta.states import PerceptorState, ActuatorState
 
 class RestReceiver(PerceptorBase):
     """
-    Extended receiver base class for REST-based inter-agent communication.
+    Extended receiver (Perceptor) base class for REST-based inter-agent communication.
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -37,6 +37,9 @@ class RestReceiver(PerceptorBase):
 
 
 class RestSender(ActuatorBase):
+    """
+    Extended sender (Actuator) base class for inter-agent communication.
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.tags.append('restful-sender')
@@ -56,3 +59,41 @@ class RestSender(ActuatorBase):
         """
         msg['sender'] = self.agent_id
         self._client.post(recipient_addr, json=msg)
+
+
+class RestPerceptor(PerceptorBase):
+    """
+    Extended Perceptor base class for observing REST-based environments.
+
+    Call `perceive` method to automatically handle the low-level interaction with the environment.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tags.append('restful-sender')
+        self._client = Client()
+
+    def __del__(self) -> None:
+        self._client.close()
+
+    def perceive(self, path: str = '/observation', **kwargs) -> dict[str, Any]:
+        response = self._client.get(f'{self.state.directory.external.environment}{path}', params=kwargs)
+        return response.json()
+
+
+class RestActuator(ActuatorBase):
+    """
+    Extended Actuator base class for interacting with REST-based environments.
+
+    Call `act` method to automatically handle the low-level interaction with the environment.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tags.append('restful-sender')
+        self._client = Client()
+
+    def __del__(self) -> None:
+        self._client.close()
+
+    def act(self, path: str = '/action', **kwargs) -> dict[str, Any] | None:
+        response = self._client.post(f'{self.state.directory.external.environment}{path}', json=kwargs)
+        return response.json()
