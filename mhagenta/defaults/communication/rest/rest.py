@@ -1,6 +1,6 @@
 import logging
 from typing import Any
-from fastapi import FastAPI, APIRouter, Request
+from fastapi import APIRouter, Request
 from httpx import Client
 
 from mhagenta.bases import PerceptorBase, ActuatorBase
@@ -76,6 +76,7 @@ class RestPerceptor(PerceptorBase):
         self._client.close()
 
     def perceive(self, path: str = '/observation', **kwargs) -> dict[str, Any]:
+        kwargs['sender'] = self.state.directory.external[self.module_id].address
         response = self._client.get(f'{self.state.directory.external.environment}{path}', params=kwargs)
         return response.json()
 
@@ -95,5 +96,6 @@ class RestActuator(ActuatorBase):
         self._client.close()
 
     def act(self, path: str = '/action', **kwargs) -> dict[str, Any] | None:
+        kwargs['sender'] = self.state.directory.external[self.module_id].address
         response = self._client.post(f'{self.state.directory.external.environment}{path}', json=kwargs)
         return response.json()
