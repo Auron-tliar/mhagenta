@@ -43,7 +43,8 @@ class ModuleBase:
     def __init__(self,
                  module_id: str,
                  initial_state: dict[str, Any] | None = None,
-                 init_kwargs: dict[str, Any] | None = None
+                 init_kwargs: dict[str, Any] | None = None,
+                 tags: Iterable[str] | None = None,
                  ) -> None:
         """ModuleBase constructor.
 
@@ -56,6 +57,7 @@ class ModuleBase:
         self.module_id = module_id
         self.initial_state = initial_state
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
+        self.tags = tags
         self._is_reactive = self._check_reactive()
 
     def step(self, state: State) -> State:
