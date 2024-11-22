@@ -58,6 +58,7 @@ class ModuleBase:
         self.initial_state = initial_state
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
         self.tags = tags if tags is not None else list()
+        self._agent_id: str = None
         self._is_reactive = self._check_reactive()
         self._state_getter: Callable[[], State] = None
         self._state_setter: Callable[[State], None] = None
@@ -123,6 +124,10 @@ class ModuleBase:
         return self._is_reactive
 
     @property
+    def agent_id(self) -> str:
+        return self._agent_id
+
+    @property
     def state(self) -> State:
         return self._state_getter()
 
@@ -155,6 +160,7 @@ class MHAModule(MHAProcess):
         )
 
         self._base = base
+        self._base._agent_id = global_params.agent_id
         self._base._log_func = self.log
 
         self._module_id = self._base.module_id
