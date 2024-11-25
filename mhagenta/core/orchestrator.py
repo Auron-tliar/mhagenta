@@ -1,10 +1,12 @@
 import asyncio
 import logging
+import os
 import shutil
 import time
 from asyncio import TaskGroup
 from dataclasses import dataclass
 from io import TextIOWrapper
+from os import PathLike
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
@@ -67,10 +69,12 @@ class Orchestrator:
     """
     SAVE_SUBDIR = 'out/save'
     LOG_CHECK_FREQ = 1.
+    WRAPPER_IMAGE_TAG = '27.3.1-dind'
 
     def __init__(self,
-                 save_dir: str | Path,
+                 save_dir: str | PathLike,
                  port_mapping: dict[int, int] | None = None,
+                 wrapping: Literal['shared', 'closed', 'none'] = 'none',
                  step_frequency: float = 1.,
                  status_frequency: float = 5.,
                  control_frequency: float = -1.,
@@ -86,14 +90,18 @@ class Orchestrator:
                  connector_cls: type[Connector] = RabbitMQConnector,
                  connector_kwargs: dict[str, Any] | None = None,
                  prerelease: bool = False,
+                 wrapper_requirements: list[str] | str | PathLike | None = None,
                  save_logs: bool = True
                  ) -> None:
         """
         Constructor method for Orchestrator.
 
         Args:
-            save_dir (str | Path): Root directory for storing agents' states, logs, and temporary files.
+            save_dir (str | PathLike): Root directory for storing agents' states, logs, and temporary files.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
+            wrapping (Literal['shared', 'closed', 'none'], optional): Specify whether to wrap agents container in
+                another container, and if so whether to use the host's network for the wrapping container. This option
+                unifies the way the host's network is accessed from the agents' containers.
             step_frequency (float, optional, default=1.0): For agent modules with periodic step functions, the
                 frequency in seconds of the step function calls that modules will try to maintain (unless their
                 execution takes longer, then the next iteration will be scheduled without a time delay).
@@ -126,6 +134,9 @@ class Orchestrator:
                 RabbitMQConnector, the default parameters are: {`host`: 'localhost', `port`: 5672, `prefetch_count`: 1}.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
                 version of mhagenta while building the container.
+            wrapper_requirements (list[str] | str | PathLike): if using a global wrapper, specifies the requirements to be
+                installed with `pip install` inside the wrapper container. Can be either a list of packages to
+                install or a path to a requirements file.
             save_logs (bool, optional, default=True): Whether to save agent logs. If True, saves each agent's logs to
                 `<agent_id>.log` at the root of the `save_dir`. Defaults to True.
         """
@@ -150,6 +161,8 @@ class Orchestrator:
             self._connector_kwargs = connector_kwargs
 
         self._port_mapping = port_mapping if port_mapping else {}
+        self._wrapping = wrapping
+        self._wrapper_requirements = wrapper_requirements
 
         self._step_frequency = step_frequency
         self._status_frequency = status_frequency
@@ -376,6 +389,47 @@ class Orchestrator:
                                                           quiet=False
                                                           )
         shutil.rmtree(build_dir)
+
+    def _run_wrapper(self,
+                     rabbitmq_image_name: str = 'mha-rabbitmq',
+                     mhagent_base_image_name: str = 'mha-base',
+                     force_run: bool = False,
+                     gui: bool = False
+                     ) -> None:
+        file = self._save_dir / f'_orchestrator'
+        host_save_dir = self._save_dir
+        self._save_dir = '/mha-save'
+        with open(file.absolute(), 'rb') as f:
+            dill.dump(self, f)
+        with open(host_save_dir / '_params', 'rb') as f:
+            dill.dump({
+                'rabbitmq_image_name': rabbitmq_image_name,
+                'mhagent_base_image_name': mhagent_base_image_name,
+                'force_run': force_run,
+                'gui': gui
+            }, f)
+        if isinstance(self._wrapper_requirements, list):
+            with open(host_save_dir / '_req/requirements.txt', 'w') as f:
+                f.write('/n'.join(self._wrapper_requirements))
+        elif self._wrapper_requirements is not None:
+            shutil.copy(self._wrapper_requirements, host_save_dir / '_req/requirements.txt')
+        else:
+            with open(host_save_dir / '_req/requirements.txt', 'w') as f:
+                f.write('')
+        shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'orchestrator_launcher.py', (host_save_dir / 'src' / 'orchestrator_launcher.py').absolute())
+        shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'run_orchestrator.sh', (host_save_dir / 'src' / 'run_orchestrator.sh').absolute())
+
+        wrapper = self._docker_client.images.pull('docker', self.WRAPPER_IMAGE_TAG)
+        self._docker_client.containers.run(image=wrapper,
+                                           name='mha-wrapper',
+                                           environment={'PRE_VERSION': 'true' if self._prerelease else 'false'},
+                                           volumes={
+                                               str(host_save_dir): {'bind': str(self._save_dir), 'mode': 'rw'}
+                                           },
+                                           network_mode='host' if self._wrapping == 'shared' else 'bridge',
+                                           command=['/bin/sh', f'{self._save_dir}/src/run_orchestrator.sh']
+                                           )
+        self._save_dir = host_save_dir
 
     async def _run_agent(self,
                          agent: AgentEntry,
