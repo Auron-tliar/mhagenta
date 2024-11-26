@@ -121,15 +121,15 @@ class Learner(MHAModule):
         out_id_channels = list()
         in_id_channels_callbacks = list()
 
-        for ll_reasoner in self._directory.ll_reasoning:
-            out_id_channels.append(self.sender_reg_entry(ll_reasoner, ConnType.send, extension='model'))
-            out_id_channels.append(self.sender_reg_entry(ll_reasoner, ConnType.send, extension='status'))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner, ConnType.request, self._receive_model_request))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner, ConnType.send, self._receive_task))
+        for ll_reasoner in self._directory.internal.ll_reasoning:
+            out_id_channels.append(self.sender_reg_entry(ll_reasoner.module_id, ConnType.send, extension='model'))
+            out_id_channels.append(self.sender_reg_entry(ll_reasoner.module_id, ConnType.send, extension='status'))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner.module_id, ConnType.request, self._receive_model_request))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner.module_id, ConnType.send, self._receive_task))
 
-        for memory in self._directory.memory:
-            out_id_channels.append(self.sender_reg_entry(memory, ConnType.request))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(memory, ConnType.send, self._receive_memories))
+        for memory in self._directory.internal.memory:
+            out_id_channels.append(self.sender_reg_entry(memory.module_id, ConnType.request))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(memory.module_id, ConnType.send, self._receive_memories))
 
         super().__init__(
             global_params=global_params,

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from io import TextIOWrapper
 from os import PathLike
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, Self
 
 import dill
 import docker
@@ -58,8 +58,6 @@ class AgentEntry:
         return module_ids
 
 
-
-
 class Orchestrator:
     """Orchestrator class that handles MHAgentA execution.
 
@@ -70,6 +68,7 @@ class Orchestrator:
     SAVE_SUBDIR = 'out/save'
     LOG_CHECK_FREQ = 1.
     WRAPPER_IMAGE_TAG = '27.3.1-dind'
+    WRAPPER_PYTHON_VERSION = '3.12.7-r0'
 
     def __init__(self,
                  save_dir: str | PathLike,
@@ -142,6 +141,7 @@ class Orchestrator:
         """
         self._agents: dict[str, AgentEntry] = dict()
 
+        save_dir = Path(save_dir).absolute()
         if isinstance(save_dir, str):
             save_dir = Path(save_dir)
         if not save_dir.exists():
@@ -308,46 +308,53 @@ class Orchestrator:
             self._task_group.create_task(self._run_agent(self._agents[agent_id], force_run=self._force_run))
 
     def _docker_build_base(self,
-                           rabbitmq_image_name: str = 'mha-rabbitmq',
-                           mha_base_image_name: str = 'mha-base',
-                           version_tag: str | None = None
+                           mhagenta_version: str = '1.1.1'
                            ) -> None:
-        if version_tag is None:
-            version_tag = CONTAINER_VERSION
-        print(f'===== BUILDING RABBITMQ BASE IMAGE: {rabbitmq_image_name}:{version_tag} =====')
-        if self._rabbitmq_image is None:
-            self._rabbitmq_image, _ = (
-                self._docker_client.images.build(path=RABBIT_IMG_PATH,
-                                                 tag=f'{rabbitmq_image_name}:{version_tag}',
-                                                 rm=True,
-                                                 quiet=False
-                                                 ))
+        if not mhagenta_version:
+            mhagenta_version = CONTAINER_VERSION
+        try:
+            print(f'===== PULLING RABBITMQ BASE IMAGE: {REPO}:rmq =====')
+            self._docker_client.images.pull(REPO, tag='rmq')
+        except docker.errors.ImageNotFound:
+            print('Pulling failed...')
+            print(f'===== BUILDING RABBITMQ BASE IMAGE: {REPO}:rmq =====')
+            if self._rabbitmq_image is None:
+                self._rabbitmq_image, _ = (
+                    self._docker_client.images.build(path=RABBIT_IMG_PATH,
+                                                     tag=f'{REPO}:rmq',
+                                                     rm=True,
+                                                     quiet=False
+                                                     ))
 
-        print(f'===== BUILDING AGENT BASE IMAGE: {mha_base_image_name}:{version_tag} =====')
         if self._base_image is None:
+            print(f'===== LOOKING FOR AGENT BASE IMAGE: {REPO}:{mhagenta_version} =====')
             try:
-                self._base_image = self._docker_client.images.list(name=f'{mha_base_image_name}:{version_tag}')[0]
+                self._base_image = self._docker_client.images.list(name=f'{REPO}:{mhagenta_version}')[0]
             except IndexError:
-                build_dir = self._save_dir.absolute() / 'tmp/'
+                print(f'===== PULLING AGENT BASE IMAGE: {REPO}:{mhagenta_version} =====')
                 try:
-                    shutil.copytree(BASE_IMG_PATH, build_dir)
-                    shutil.copytree(self._package_dir, build_dir / 'mhagenta')
-
-                    self._base_image, _ = (
-                        self._docker_client.images.build(path=str(build_dir),
-                                                         buildargs={
-                                                             'SRC_IMAGE': rabbitmq_image_name,
-                                                             'SRC_VERSION': version_tag,
-                                                             'PRE_VERSION': "true" if self._prerelease else "false"
-                                                         },
-                                                         tag=f'{mha_base_image_name}:{version_tag}',
-                                                         rm=True,
-                                                         quiet=False
-                                                         ))
-                except Exception as ex:
-                    shutil.rmtree(build_dir, ignore_errors=True)
-                    raise ex
-                shutil.rmtree(build_dir)
+                    self._base_image = self._docker_client.images.pull(REPO, mhagenta_version)
+                except docker.errors.ImageNotFound:
+                    build_dir = self._save_dir.absolute() / 'tmp/'
+                    try:
+                        print(f'===== BUILDING AGENT BASE IMAGE: {REPO}:{mhagenta_version} =====')
+                        shutil.copytree(BASE_IMG_PATH, build_dir)
+                        self._base_image, _ = (
+                            self._docker_client.images.build(
+                                path=str(build_dir),
+                                buildargs={
+                                    'SRC_IMAGE': REPO,
+                                    'SRC_TAG': 'rmq',
+                                    'PRE_VERSION': "true" if self._prerelease else "false"
+                                },
+                                tag=f'{REPO}:{mhagenta_version}',
+                                rm=True,
+                                quiet=False
+                            ))
+                    except Exception as ex:
+                        shutil.rmtree(build_dir, ignore_errors=True)
+                        raise ex
+                    shutil.rmtree(build_dir)
 
     def _docker_build_agent(self,
                             agent: AgentEntry
@@ -390,47 +397,6 @@ class Orchestrator:
                                                           )
         shutil.rmtree(build_dir)
 
-    def _run_wrapper(self,
-                     rabbitmq_image_name: str = 'mha-rabbitmq',
-                     mhagent_base_image_name: str = 'mha-base',
-                     force_run: bool = False,
-                     gui: bool = False
-                     ) -> None:
-        file = self._save_dir / f'_orchestrator'
-        host_save_dir = self._save_dir
-        self._save_dir = '/mha-save'
-        with open(file.absolute(), 'rb') as f:
-            dill.dump(self, f)
-        with open(host_save_dir / '_params', 'rb') as f:
-            dill.dump({
-                'rabbitmq_image_name': rabbitmq_image_name,
-                'mhagent_base_image_name': mhagent_base_image_name,
-                'force_run': force_run,
-                'gui': gui
-            }, f)
-        if isinstance(self._wrapper_requirements, list):
-            with open(host_save_dir / '_req/requirements.txt', 'w') as f:
-                f.write('/n'.join(self._wrapper_requirements))
-        elif self._wrapper_requirements is not None:
-            shutil.copy(self._wrapper_requirements, host_save_dir / '_req/requirements.txt')
-        else:
-            with open(host_save_dir / '_req/requirements.txt', 'w') as f:
-                f.write('')
-        shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'orchestrator_launcher.py', (host_save_dir / 'src' / 'orchestrator_launcher.py').absolute())
-        shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'run_orchestrator.sh', (host_save_dir / 'src' / 'run_orchestrator.sh').absolute())
-
-        wrapper = self._docker_client.images.pull('docker', self.WRAPPER_IMAGE_TAG)
-        self._docker_client.containers.run(image=wrapper,
-                                           name='mha-wrapper',
-                                           environment={'PRE_VERSION': 'true' if self._prerelease else 'false'},
-                                           volumes={
-                                               str(host_save_dir): {'bind': str(self._save_dir), 'mode': 'rw'}
-                                           },
-                                           network_mode='host' if self._wrapping == 'shared' else 'bridge',
-                                           command=['/bin/sh', f'{self._save_dir}/src/run_orchestrator.sh']
-                                           )
-        self._save_dir = host_save_dir
-
     async def _run_agent(self,
                          agent: AgentEntry,
                          force_run: bool = False
@@ -458,27 +424,28 @@ class Orchestrator:
             except NotFound:
                 pass
 
-            agent.container = self._docker_client.containers.run(image=agent.image,
-                                                                 detach=True,
-                                                                 name=agent_name,
-                                                                 environment={"AGENT_ID": agent_name},
-                                                                 volumes={
-                                                                     str(agent_dir): {'bind': '/out', 'mode': 'rw'}
-                                                                 },
-                                                                 extra_hosts={'host.docker.internal': 'host-gateway'},
-                                                                 ports=agent.port_mapping)
+            agent.container = self._docker_client.containers.run(
+                image=agent.image,
+                detach=True,
+                name=agent_name,
+                environment={"AGENT_ID": agent_name},
+                volumes={
+                    str(agent_dir): {'bind': '/out', 'mode': 'rw'}
+                },
+                extra_hosts={'host.docker.internal': 'host-gateway'},
+                ports=agent.port_mapping,
+                # links={f'mha-wrapper:{agent_name}'} if self._wrapping == 'handled' else None,
+            )
 
     async def arun(self,
-                   rabbitmq_image_name: str = 'mha-rabbitmq',
-                   mhagent_base_image_name: str = 'mha-base',
+                   mhagenta_version: str = '1.1.1',
                    force_run: bool = False,
                    gui: bool = False
                    ) -> None:
         """Run all the agents as an async method. Use in case you want to control the async task loop yourself.
 
         Args:
-            rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the base MHAgentA RabbitMQ image.
-            mhagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
+            mhagenta_version (str, optional): Version of mhagenta base container. Defaults to '1.1.1'.
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
@@ -489,9 +456,9 @@ class Orchestrator:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
 
         """
+
         if self._base_image is None:
-            self._docker_build_base(rabbitmq_image_name=rabbitmq_image_name,
-                                    mha_base_image_name=mhagent_base_image_name)
+            self._docker_build_base(mhagenta_version=mhagenta_version)
 
         self._force_run = force_run
         for agent in self._agents.values():
@@ -516,16 +483,14 @@ class Orchestrator:
         print('===== EXECUTION FINISHED =====')
 
     def run(self,
-            rabbitmq_image_name: str = 'mha-rabbitmq',
-            mhagent_base_image_name: str = 'mha-base',
+            mhagenta_version='1.1.1',
             force_run: bool = False,
             gui: bool = False
             ) -> None:
         """Run all the agents.
 
         Args:
-            rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the base MHAgentA RabbitMQ image.
-            mhagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
+            mhagenta_version (str, optional): Version of mhagenta base container. Defaults to '1.1.1'.
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
@@ -536,9 +501,17 @@ class Orchestrator:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
 
         """
+        if self._wrapping == 'closed' or self._wrapping == 'shared':
+            run_wrapper(
+                orchestrator=self,
+                mhagenta_version=mhagenta_version,
+                force_run=force_run,
+                gui=gui
+            )
+            return
+
         asyncio.run(self.arun(
-            rabbitmq_image_name=rabbitmq_image_name,
-            mhagent_base_image_name=mhagent_base_image_name,
+            mhagenta_version=mhagenta_version,
             force_run=force_run,
             gui=gui
         ))
@@ -595,3 +568,71 @@ class Orchestrator:
 
     def __getitem__(self, agent_id: str) -> AgentEntry:
         return self._agents[agent_id]
+
+
+def run_wrapper(orchestrator: Orchestrator,
+                mhagenta_version='1.1.1',
+                force_run: bool = False,
+                gui: bool = False
+                ) -> None:
+    file = orchestrator._save_dir / f'_orchestrator'
+    host_save_dir = orchestrator._save_dir
+    orchestrator._save_dir = '/mha-save'
+    client = orchestrator._docker_client
+    orchestrator._docker_client = None
+    wrap_mode = orchestrator._wrapping
+    orchestrator._wrapping = 'handled'
+    with open(file.absolute(), 'wb') as f:
+        dill.dump(orchestrator, f, recurse=True)
+    with open(host_save_dir / '_params', 'wb') as f:
+        dill.dump({
+            'mhagenta_version': mhagenta_version,
+            'force_run': force_run,
+            'gui': gui
+        }, f, recurse=True)
+    os.makedirs(host_save_dir / '_req', exist_ok=True)
+    if isinstance(orchestrator._wrapper_requirements, list):
+        with open(host_save_dir / '_req/requirements.txt', 'w') as f:
+            f.write('/n'.join(orchestrator._wrapper_requirements))
+    elif orchestrator._wrapper_requirements is not None:
+        shutil.copy(orchestrator._wrapper_requirements, host_save_dir / '_req/requirements.txt')
+    else:
+        with open(host_save_dir / '_req/requirements.txt', 'w') as f:
+            f.write('')
+    os.makedirs(host_save_dir / 'src', exist_ok=True)
+    shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'orchestrator_launcher.py', (host_save_dir / 'src' / 'orchestrator_launcher.py').absolute())
+    shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'run_orchestrator.sh', (host_save_dir / 'src' / 'run_orchestrator.sh').absolute())
+
+    wrapper = client.images.pull('docker', tag=orchestrator.WRAPPER_IMAGE_TAG)
+    container = client.containers.run(image=wrapper,
+                                      name='mha-wrapper',
+                                      environment={'PRE_VERSION': 'true' if orchestrator._prerelease else 'false'},
+                                      volumes={
+                                          str(host_save_dir): {'bind': str(orchestrator._save_dir), 'mode': 'rw'}
+                                      },
+                                      network_mode='host' if wrap_mode == 'shared' else 'bridge',
+                                      privileged=True,
+                                      remove=True,
+                                      detach=True,
+                                      stdout=False,
+                                      stderr=False
+                                      )
+    time.sleep(5)
+    _, exec_log = container.exec_run(
+        ['/bin/sh', f'{orchestrator._save_dir}/src/run_orchestrator.sh'],
+        stdout=True,
+        stderr=True,
+        stream=True,
+        tty=True
+    )
+    orchestrator._save_dir = host_save_dir
+    orchestrator._wrapping = wrap_mode
+    orchestrator._docker_client = client
+
+    for log in exec_log:
+        log = log.decode().split('\n')
+        for line in log:
+            if line.strip():
+                print(line)
+
+    container.stop()

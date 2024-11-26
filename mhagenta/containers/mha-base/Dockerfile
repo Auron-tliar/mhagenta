@@ -1,6 +1,6 @@
 ARG SRC_IMAGE="mha-rabbitmq"
-ARG SRC_VERSION="latest"
-FROM ${SRC_IMAGE}:${SRC_VERSION}
+ARG SRC_TAG="latest"
+FROM ${SRC_IMAGE}:${SRC_TAG}
 LABEL authors="Dmitry Gnatyshak"
 ARG PRE_VERSION="false"
 

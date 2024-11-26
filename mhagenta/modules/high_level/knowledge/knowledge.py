@@ -96,16 +96,16 @@ class Knowledge(MHAModule):
         out_id_channels = list()
         in_id_channels_callbacks = list()
 
-        for ll_reasoner in self._directory.ll_reasoning:
-            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner, ConnType.send, self._receive_beliefs))
+        for ll_reasoner in self._directory.internal.ll_reasoning:
+            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner.module_id, ConnType.send, self._receive_beliefs))
 
-        for memory in self._directory.memory:
-            out_id_channels.append(self.sender_reg_entry(memory, ConnType.send))
+        for memory in self._directory.internal.memory:
+            out_id_channels.append(self.sender_reg_entry(memory.module_id, ConnType.send))
 
-        for hl_reasoner in self._directory.hl_reasoning:
-            out_id_channels.append(self.sender_reg_entry(hl_reasoner, ConnType.send))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner, ConnType.request, self._receive_belief_request))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner, ConnType.send, self._receive_beliefs))
+        for hl_reasoner in self._directory.internal.hl_reasoning:
+            out_id_channels.append(self.sender_reg_entry(hl_reasoner.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner.module_id, ConnType.request, self._receive_belief_request))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner.module_id, ConnType.send, self._receive_beliefs))
 
         super().__init__(
             global_params=global_params,
