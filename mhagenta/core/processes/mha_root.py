@@ -64,6 +64,7 @@ class MHARoot(MHAProcess):
     def __init__(self,
                  agent_id: str,
                  connector_cls: type[Connector],
+                 directory: Directory,
                  modules: Iterable[ModuleBase] | None = None,
                  perceptors: Iterable[PerceptorBase] | PerceptorBase | None = None,
                  actuators: Iterable[ActuatorBase] | ActuatorBase | None = None,
@@ -114,7 +115,7 @@ class MHARoot(MHAProcess):
         self._extend_modules_list(modules, goal_graphs)
         self._extend_modules_list(modules, memory)
 
-        self._directory = Directory()
+        self._directory = directory
         for module in modules:
             self._directory.internal._add_module(module.module_id, module.module_type, module.tags)
 

@@ -53,6 +53,7 @@ class ModuleBase:
             initial_state (dict[str, Any], optional): dictionary of fields and corresponding values to be inserted into
                 module's internal state at initialization. Later on can be accessed via State.field.
             init_kwargs (dict[str, Any], optional): keyword arguments to be passed to the `on_init` method.
+            tags (Iterable[str], optional): a list of tags associated with this module for directory search.
         """
         self.module_id = module_id
         self.initial_state = initial_state

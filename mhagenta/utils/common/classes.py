@@ -1,5 +1,6 @@
 import logging
 import sys
+import os
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -342,8 +343,13 @@ class IDirectory(BaseDirectory):
 
 class EDirectory(BaseDirectory):
     ENVIRONMENT = 'environment'
+    localhost_win = 'http://host.docker.internal'
+    localhost_linux = 'http://172.17.0.1'
 
-    def __init__(self, env_address: Any | None = None, env_tags: Iterable[str] | None = None) -> None:
+    def __init__(self,
+                 env_address: Any | None = None,
+                 env_tags: Iterable[str] | None = None
+                 ) -> None:
         if env_address is None:
             super().__init__()
             return
@@ -371,9 +377,11 @@ class EDirectory(BaseDirectory):
 
 
 class Directory:
-    def __init__(self):
+    def __init__(self,
+                 env_address: Any | None = None,
+                 env_tags: Iterable[str] | None = None):
         self._internal = IDirectory()
-        self._external = EDirectory()
+        self._external = EDirectory(env_address=env_address, env_tags=env_tags)
 
     @property
     def internal(self) -> IDirectory:

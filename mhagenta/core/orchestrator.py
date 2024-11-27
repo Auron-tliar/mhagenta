@@ -7,6 +7,7 @@ from asyncio import TaskGroup
 from dataclasses import dataclass
 from io import TextIOWrapper
 from os import PathLike
+import socket
 from pathlib import Path
 from typing import Any, Iterable, Literal, Self
 
@@ -20,7 +21,10 @@ import mhagenta
 from mhagenta.bases import *
 from mhagenta.containers import *
 from mhagenta.core.connection import Connector, RabbitMQConnector
-from mhagenta.utils.common import DEFAULT_LOG_FORMAT
+from mhagenta.utils import DEFAULT_PORT
+from mhagenta.utils.common import DEFAULT_LOG_FORMAT, Directory
+from mhagenta.utils.common.classes import EDirectory
+from mhagenta.defaults.communication import RestEnvironmentBase
 
 from mhagenta.gui import Monitor
 
@@ -35,6 +39,9 @@ class AgentEntry:
     container: Container | None = None
     port_mapping: dict[int, int] | None = None
     num_copies: int = 1
+    save_logs: bool = True
+    tags: Iterable[str] | None = None
+    port: int | None = None
 
     @property
     def module_ids(self) -> list[str]:
@@ -57,6 +64,12 @@ class AgentEntry:
                 module_ids.append(self.kwargs[key].module_id)
         return module_ids
 
+@dataclass
+class EnvironmentEntry:
+    environment: RestEnvironmentBase
+    url: str
+    tags: list[str] | None = None
+
 
 class Orchestrator:
     """Orchestrator class that handles MHAgentA execution.
@@ -73,7 +86,6 @@ class Orchestrator:
     def __init__(self,
                  save_dir: str | PathLike,
                  port_mapping: dict[int, int] | None = None,
-                 wrapping: Literal['shared', 'closed', 'none'] = 'none',
                  step_frequency: float = 1.,
                  status_frequency: float = 5.,
                  control_frequency: float = -1.,
@@ -89,7 +101,7 @@ class Orchestrator:
                  connector_cls: type[Connector] = RabbitMQConnector,
                  connector_kwargs: dict[str, Any] | None = None,
                  prerelease: bool = False,
-                 wrapper_requirements: list[str] | str | PathLike | None = None,
+                 initial_port: int | None = None,
                  save_logs: bool = True
                  ) -> None:
         """
@@ -98,9 +110,6 @@ class Orchestrator:
         Args:
             save_dir (str | PathLike): Root directory for storing agents' states, logs, and temporary files.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
-            wrapping (Literal['shared', 'closed', 'none'], optional): Specify whether to wrap agents container in
-                another container, and if so whether to use the host's network for the wrapping container. This option
-                unifies the way the host's network is accessed from the agents' containers.
             step_frequency (float, optional, default=1.0): For agent modules with periodic step functions, the
                 frequency in seconds of the step function calls that modules will try to maintain (unless their
                 execution takes longer, then the next iteration will be scheduled without a time delay).
@@ -133,13 +142,16 @@ class Orchestrator:
                 RabbitMQConnector, the default parameters are: {`host`: 'localhost', `port`: 5672, `prefetch_count`: 1}.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
                 version of mhagenta while building the container.
-            wrapper_requirements (list[str] | str | PathLike): if using a global wrapper, specifies the requirements to be
-                installed with `pip install` inside the wrapper container. Can be either a list of packages to
-                install or a path to a requirements file.
+            initial_port (int, optional): The initial port number assigned to agent containers. Consequent agents will
+                get assigned incremented (open) port numbers. Defaults to 61200.
             save_logs (bool, optional, default=True): Whether to save agent logs. If True, saves each agent's logs to
                 `<agent_id>.log` at the root of the `save_dir`. Defaults to True.
         """
+        if os.name != 'nt' and os.name != 'posix':
+            raise RuntimeError(f'OS {os.name} is not supported.')
+
         self._agents: dict[str, AgentEntry] = dict()
+        self._environment: EnvironmentEntry | None = None
 
         save_dir = Path(save_dir).absolute()
         if isinstance(save_dir, str):
@@ -161,8 +173,6 @@ class Orchestrator:
             self._connector_kwargs = connector_kwargs
 
         self._port_mapping = port_mapping if port_mapping else {}
-        self._wrapping = wrapping
-        self._wrapper_requirements = wrapper_requirements
 
         self._step_frequency = step_frequency
         self._status_frequency = status_frequency
@@ -191,6 +201,7 @@ class Orchestrator:
 
         self._task_group: TaskGroup | None = None
         self._force_run = False
+        self._next_port = initial_port if initial_port is not None else DEFAULT_PORT
 
         self._docker_init()
 
@@ -202,6 +213,34 @@ class Orchestrator:
 
     def _docker_init(self) -> None:
         self._docker_client = docker.from_env()
+
+    @staticmethod
+    def _check_port(port: int) -> bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('localhost', port)) != 0
+
+    def _assign_port(self) -> int:
+        for port in range(self._next_port, 65536):
+            if self._check_port(port):
+                self._next_port = port + 1
+                return port
+
+    def set_environment(self,
+                        environment: type(RestEnvironmentBase),
+                        port: str | None = None,
+                        tags: list[str] | None = None
+                        ):
+        os_type = os.name
+        if os_type == 'nt':
+            url = f'{EDirectory.localhost_win}:{self._assign_port()}'
+        else:
+            url = f'{EDirectory.localhost_linux}:{self._assign_port()}'
+        environment = environment(url, tags)
+        self._environment = EnvironmentEntry(
+            environment=environment,
+            url=environment.url,
+            tags=environment.tags
+        )
 
     def add_agent(self,
                   agent_id: str,
@@ -225,7 +264,8 @@ class Orchestrator:
                   port_mapping: dict[int, int] | None = None,
                   connector_cls: type[Connector] | None = None,
                   connector_kwargs: dict[str, Any] | None = None,
-                  save_logs: bool | None = None
+                  save_logs: bool | None = None,
+                  tags: Iterable[str] | None = None
                   ) -> None:
         """Define an agent model to be added to the execution.
 
@@ -270,6 +310,7 @@ class Orchestrator:
                 the Orchestrator's `connector_kwargs`.
             save_logs (bool, optional): Whether to save agent logs. If True, saves the agent's logs to
                 `<agent_id>.log` at the root of the `save_dir`. Defaults to the orchestrator's `save_logs`.
+            tags (Iterable[str], optional): a list of tags associated with this agent for directory search.
 
         """
         kwargs = {
@@ -302,10 +343,31 @@ class Orchestrator:
             agent_id=agent_id,
             port_mapping=port_mapping if port_mapping else self._port_mapping,
             num_copies=num_copies,
-            kwargs=kwargs
+            kwargs=kwargs,
+            save_logs=save_logs if save_logs is not None else self._save_logs,
+            tags=tags
         )
         if self._task_group is not None:
             self._task_group.create_task(self._run_agent(self._agents[agent_id], force_run=self._force_run))
+
+    def _compose_directory(self) -> Directory:
+        if self._environment is not None:
+            directory = Directory(self._environment.url, self._environment.tags)
+        else:
+            directory = Directory()
+
+        for agent in self._agents.values():
+            if agent.port is None:
+                port = self._assign_port()
+                agent.port = port
+            else:
+                port = agent.port
+            url = f'{EDirectory.localhost_win if os.name == 'nt' else EDirectory.localhost_linux}:{port}'
+            directory.external.add_agent(
+                agent_id=agent.agent_id,
+                address=url,
+                tags=agent.tags
+            )
 
     def _docker_build_base(self,
                            mhagenta_version: str = '1.1.1'
@@ -374,6 +436,7 @@ class Orchestrator:
         shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'agent_launcher.py', (build_dir / 'src' / 'agent_launcher.py').absolute())
         shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'start.sh', (build_dir / 'src' / 'start.sh').absolute())
 
+        agent.kwargs['directory'] = self._compose_directory()
         if agent.kwargs['exec_start_time'] is None:
             agent.kwargs['exec_start_time'] = self._start_time
         agent.kwargs['exec_start_time'] += self._agent_start_delay
@@ -433,8 +496,7 @@ class Orchestrator:
                     str(agent_dir): {'bind': '/out', 'mode': 'rw'}
                 },
                 extra_hosts={'host.docker.internal': 'host-gateway'},
-                ports=agent.port_mapping,
-                # links={f'mha-wrapper:{agent_name}'} if self._wrapping == 'handled' else None,
+                ports=agent.port_mapping
             )
 
     async def arun(self,
@@ -501,15 +563,6 @@ class Orchestrator:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
 
         """
-        if self._wrapping == 'closed' or self._wrapping == 'shared':
-            run_wrapper(
-                orchestrator=self,
-                mhagenta_version=mhagenta_version,
-                force_run=force_run,
-                gui=gui
-            )
-            return
-
         asyncio.run(self.arun(
             mhagenta_version=mhagenta_version,
             force_run=force_run,
@@ -568,71 +621,3 @@ class Orchestrator:
 
     def __getitem__(self, agent_id: str) -> AgentEntry:
         return self._agents[agent_id]
-
-
-def run_wrapper(orchestrator: Orchestrator,
-                mhagenta_version='1.1.1',
-                force_run: bool = False,
-                gui: bool = False
-                ) -> None:
-    file = orchestrator._save_dir / f'_orchestrator'
-    host_save_dir = orchestrator._save_dir
-    orchestrator._save_dir = '/mha-save'
-    client = orchestrator._docker_client
-    orchestrator._docker_client = None
-    wrap_mode = orchestrator._wrapping
-    orchestrator._wrapping = 'handled'
-    with open(file.absolute(), 'wb') as f:
-        dill.dump(orchestrator, f, recurse=True)
-    with open(host_save_dir / '_params', 'wb') as f:
-        dill.dump({
-            'mhagenta_version': mhagenta_version,
-            'force_run': force_run,
-            'gui': gui
-        }, f, recurse=True)
-    os.makedirs(host_save_dir / '_req', exist_ok=True)
-    if isinstance(orchestrator._wrapper_requirements, list):
-        with open(host_save_dir / '_req/requirements.txt', 'w') as f:
-            f.write('/n'.join(orchestrator._wrapper_requirements))
-    elif orchestrator._wrapper_requirements is not None:
-        shutil.copy(orchestrator._wrapper_requirements, host_save_dir / '_req/requirements.txt')
-    else:
-        with open(host_save_dir / '_req/requirements.txt', 'w') as f:
-            f.write('')
-    os.makedirs(host_save_dir / 'src', exist_ok=True)
-    shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'orchestrator_launcher.py', (host_save_dir / 'src' / 'orchestrator_launcher.py').absolute())
-    shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'run_orchestrator.sh', (host_save_dir / 'src' / 'run_orchestrator.sh').absolute())
-
-    wrapper = client.images.pull('docker', tag=orchestrator.WRAPPER_IMAGE_TAG)
-    container = client.containers.run(image=wrapper,
-                                      name='mha-wrapper',
-                                      environment={'PRE_VERSION': 'true' if orchestrator._prerelease else 'false'},
-                                      volumes={
-                                          str(host_save_dir): {'bind': str(orchestrator._save_dir), 'mode': 'rw'}
-                                      },
-                                      network_mode='host' if wrap_mode == 'shared' else 'bridge',
-                                      privileged=True,
-                                      remove=True,
-                                      detach=True,
-                                      stdout=False,
-                                      stderr=False
-                                      )
-    time.sleep(5)
-    _, exec_log = container.exec_run(
-        ['/bin/sh', f'{orchestrator._save_dir}/src/run_orchestrator.sh'],
-        stdout=True,
-        stderr=True,
-        stream=True,
-        tty=True
-    )
-    orchestrator._save_dir = host_save_dir
-    orchestrator._wrapping = wrap_mode
-    orchestrator._docker_client = client
-
-    for log in exec_log:
-        log = log.decode().split('\n')
-        for line in log:
-            if line.strip():
-                print(line)
-
-    container.stop()

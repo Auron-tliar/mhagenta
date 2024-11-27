@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Iterable
 
 from fastapi import APIRouter, Request
 
@@ -7,9 +7,11 @@ class RestEnvironmentBase:
     """
     Base class for REST-based environments.
     """
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, tags: Iterable[str] | None = None) -> None:
         self.url = url
         self.tags = ['restful-router']
+        if tags:
+            self.tags.extend(tags)
         self.router = APIRouter()
         self.router.add_api_route('/observation', self._on_observation_request, methods=['GET'])
         self.router.add_api_route('/action', self._on_action_request, methods=['POST'])
