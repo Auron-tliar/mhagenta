@@ -89,7 +89,7 @@ class RestActuator(ActuatorBase):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.tags.append('restful-sender')
+        self.tags.append('restful-router')
         self._client = Client()
 
     def __del__(self) -> None:
