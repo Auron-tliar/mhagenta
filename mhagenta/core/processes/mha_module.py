@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import field
 from pathlib import Path
 from typing import Any, ClassVar, Iterable, Literal, Callable
 
@@ -21,7 +22,7 @@ class GlobalParams(BaseModel):
     agent_id: str
     directory: Directory
     connector_cls: type[Connector]
-    connector_kwargs: dict[str, Any] = dict()
+    connector_kwargs: dict[str, Any] = field(default_factory=dict)  # dict()
     step_frequency: float = .1
     status_frequency: float = 5.
     control_frequency: float = .05
@@ -176,6 +177,7 @@ class MHAModule(MHAProcess):
             time_func=self._time.get_exec_time,
             directory=global_params.directory,
             outbox=outbox_cls(),
+            agent_time=self._time,
             **self._base.initial_state)
         self._base._state_getter = lambda: self._state
         self._base._state_setter = self._process_update
