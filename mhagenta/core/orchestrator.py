@@ -41,7 +41,7 @@ class AgentEntry:
     num_copies: int = 1
     save_logs: bool = True
     tags: Iterable[str] | None = None
-    port: int | None = None
+    # port: int | None = None
 
     @property
     def module_ids(self) -> list[str]:
@@ -66,8 +66,8 @@ class AgentEntry:
 
 @dataclass
 class EnvironmentEntry:
-    environment: RestEnvironmentBase
-    url: str
+    environment: RMQEnvironment
+    # url: str
     tags: list[str] | None = None
 
 
@@ -214,33 +214,45 @@ class Orchestrator:
     def _docker_init(self) -> None:
         self._docker_client = docker.from_env()
 
-    @staticmethod
-    def _check_port(port: int) -> bool:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex(('localhost', port)) != 0
+    # @staticmethod
+    # def _check_port(port: int) -> bool:
+    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    #         return s.connect_ex(('localhost', port)) != 0
+    #
+    # def _assign_port(self) -> int:
+    #     for port in range(self._next_port, 65536):
+    #         if self._check_port(port):
+    #             self._next_port = port + 1
+    #             return port
 
-    def _assign_port(self) -> int:
-        for port in range(self._next_port, 65536):
-            if self._check_port(port):
-                self._next_port = port + 1
-                return port
+
+
+
 
     def set_environment(self,
-                        environment: type(RestEnvironmentBase),
+                        environment: type(RMQEnvironment),
                         port: str | None = None,
                         tags: list[str] | None = None
                         ):
         os_type = os.name
-        if os_type == 'nt':
-            url = f'{EDirectory.localhost_win}:{self._assign_port()}'
-        else:
-            url = f'{EDirectory.localhost_linux}:{self._assign_port()}'
+        # if os_type == 'nt':
+        #     url = f'{EDirectory.localhost_win}:{self._assign_port()}'
+        # else:
+        #     url = f'{EDirectory.localhost_linux}:{self._assign_port()}'
         environment = environment(url, tags)
         self._environment = EnvironmentEntry(
             environment=environment,
             url=environment.url,
             tags=environment.tags
         )
+
+
+
+
+
+
+
+
 
     def add_agent(self,
                   agent_id: str,

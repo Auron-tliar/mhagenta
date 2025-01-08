@@ -1,4 +1,4 @@
-from mhagenta.defaults.communication.rest import RestReceiver, RestSender, RestPerceptor, RestActuator, RestEnvironmentBase
+from mhagenta.defaults.communication.rabbitmq import RMQReceiverBase, RMQSenderBase, RMQPerceptorBase, RMQActuatorBase, RMQEnvironment
 
 
-__all__ = ['RestReceiver', 'RestSender', 'RestPerceptor', 'RestActuator', 'RestEnvironmentBase']
+__all__ = ['RMQReceiverBase', 'RMQSenderBase', 'RMQPerceptorBase', 'RMQActuatorBase', 'RMQEnvironment']

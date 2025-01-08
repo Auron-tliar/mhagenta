@@ -65,6 +65,7 @@ class ModuleBase:
         self._state_getter: Callable[[], State] = None
         self._state_setter: Callable[[State], None] = None
         self._log_func: Callable[[int, str], None] = None
+        self._owner: MHAModule = None
 
         self.extras: dict[str, Any] = dict()
 
@@ -79,6 +80,12 @@ class ModuleBase:
 
         """
         return state
+
+    async def _internal_init(self) -> None:
+        pass
+
+    async def _internal_start(self) -> None:
+        pass
 
     def on_init(self, **kwargs) -> None:
         """Called after the module finished initializing
@@ -166,6 +173,7 @@ class MHAModule(MHAProcess):
         self._base = base
         self._base._agent_id = global_params.agent_id
         self._base._log_func = self.log
+        self._base._owner = self
 
         self._module_id = self._base.module_id
 
@@ -209,10 +217,12 @@ class MHAModule(MHAProcess):
 
     async def on_init(self) -> None:
         await self._messenger.initialize()
+        await self._base._internal_init()
         self._base.on_init(**self._base.init_kwargs)
 
     async def on_start(self) -> None:
         self._task_group.create_task(self._messenger.start())
+        self._task_group.create_task(self._base._internal_start())
         self._queue.push(
             func=self._report_status,
             ts=self._time.agent,

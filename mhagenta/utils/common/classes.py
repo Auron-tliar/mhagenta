@@ -4,6 +4,7 @@ import os
 import time
 import uuid
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, ClassVar, Callable, Self, Iterable, Optional
 from uuid import uuid4
 import dataclasses
@@ -492,6 +493,25 @@ class StatusReport:
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}[{self.agent_id}.{self.module_id}]({self.status}, {self.ts}{f": {self.args}" if self.args else ""})'
+
+
+@dataclass
+class Performatives:
+    INFORM: ClassVar[str] = 'inform'
+
+    AGREE: ClassVar[str] = 'agree'
+    CANCEL: ClassVar[str] = 'cancel'
+    CFP: ClassVar[str] = 'cfp'
+    CONFIRM: ClassVar[str] = 'confirm'
+    NOT_UNDERSTOOD: ClassVar[str] = 'not-understood'
+    PROPOSE: ClassVar[str] = 'propose'
+    QUERY: ClassVar[str] = 'query'
+    REFUSE: ClassVar[str] = 'refuse'
+    REJECT_PROPOSAL: ClassVar[str] = 'reject-proposal'
+    REQUEST: ClassVar[str] = 'request'
+
+    OBSERVE: ClassVar[str] = 'observe'
+    ACT: ClassVar[str] = 'act'
 
 
 @dataclass

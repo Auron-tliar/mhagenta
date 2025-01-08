@@ -361,7 +361,7 @@ class RabbitMQConnector(Connector):
             exchange_name=self._main_exchange if self._main_exchange is not None else self._external_exchange,
             exchange_type=ExchangeType.direct,
             routing_keys=channel,
-            msg_callback=self._to_pika_msg_callback(sender, channel, callback),
+            msg_callback=self._to_pika_msg_callback(sender, channel, callback) if self._main_exchange is not None else self._to_pika_ext_msg_callback(callback),
             agent_time=self._time,
             prefetch_count=self._prefetch_count,
             log_tags=self._log_tags,
@@ -385,7 +385,7 @@ class RabbitMQConnector(Connector):
             log_format=self._log_format
         )
         await publisher.start()
-        self._publishers[(self._main_exchange, channel)] = publisher
+        self._publishers[(self._main_exchange, channel if self._main_exchange is not None else '')] = publisher
 
     async def subscribe_to_cmds(self, callback: Callable[[AgentCmd], None], **kwargs) -> None:
         # self.debug('Subscribing to cmds...')
@@ -467,7 +467,7 @@ class RabbitMQConnector(Connector):
         else:
             self._publish_message(
                 exchange_name=self._external_exchange,
-                routing_key=channel,
+                routing_key=recipient,
                 message=self.encode_msg(msg)
             )
 
@@ -553,6 +553,13 @@ class RabbitMQConnector(Connector):
             callback(sender, channel, message)
         return pika_callback
 
+    def _to_pika_ext_msg_callback(self, callback: MsgProcessorCallback) ->\
+            Callable[[pika.channel.Channel, Basic.Deliver, BasicProperties, bytes], None]:
+        def pika_callback(pika_channel: pika.channel.Channel, method: Basic.Deliver, properties: BasicProperties, body: bytes) -> None:
+            message = self.decode_msg(body)
+            callback(message.sender_id, '', message)
+        return pika_callback
+
     @staticmethod
     def _to_pika_cmd_callback(callback: Callable[[AgentCmd], None]) ->\
             Callable[[pika.channel.Channel, Basic.Deliver, BasicProperties, bytes], None]:
@@ -574,9 +581,6 @@ class RabbitMQConnector(Connector):
                          routing_key: str | None,
                          message: dict | str | bytes) -> None:
         publisher_key = (exchange_name, None) if (exchange_name, None) in self._publishers else (exchange_name, routing_key)
-        if self._external_exchange and publisher_key not in self._publishers:
-            self.register_out_channel(
-                recipient=routing_key,
-                channel=routing_key
-            )
+        if self._external_exchange:
+            publisher_key = (None, '')
         self._publishers[publisher_key].publish_message(message, routing_key)
