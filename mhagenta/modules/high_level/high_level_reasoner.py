@@ -1,4 +1,4 @@
-from typing import Iterable, ClassVar
+from typing import Iterable, ClassVar, Any
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Goal, Belief, State
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
@@ -19,16 +19,6 @@ class HLOutbox(Outbox):
 
         """
         self._add(knowledge_id, ConnType.request, kwargs)
-
-    def request_memories(self, memory_id: str, **kwargs) -> None:
-        """Request memories of beliefs from a memory structure.
-
-        Args:
-            memory_id (str): `module_id` of the relevant memory structure.
-            **kwargs: additional keyword arguments to be included in the message.
-
-        """
-        self._add(memory_id, ConnType.request, kwargs)
 
     def request_action(self, actuator_id: str, **kwargs) -> None:
         """Request an action from an actuator.
@@ -67,6 +57,30 @@ class HLOutbox(Outbox):
         if kwargs:
             body.update(kwargs)
         self._add(goal_graph_id, ConnType.send, body)
+
+    def request_model(self, learner_id: str, **kwargs) -> None:
+        """Request the current model from a learner.
+
+        Args:
+            learner_id (str): `module_id` of a learner training the required model.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
+        self._add(learner_id, ConnType.request, kwargs)
+
+    def send_learner_task(self, learner_id: str, task: Any, **kwargs) -> None:
+        """Send a new or updated learning task to a learner.
+
+        Args:
+            learner_id (str): `module_id` of the relevant learner.
+            task (Any): an object specifying the learning task.
+            **kwargs: additional keyword arguments to be included in the message.
+
+        """
+        body = {'task': task}
+        if kwargs:
+            body.update(kwargs)
+        self._add(learner_id, ConnType.send, body)
 
 
 HLState = State[HLOutbox]
@@ -113,6 +127,22 @@ class HLReasonerBase(ModuleBase):
         """
         return state
 
+    def on_model(self, state: HLState, sender: str, model: Any, **kwargs) -> HLState:
+        """Override to define high-level reasoner's reaction to receiving a learned model.
+
+        Args:
+            state (HLState): High-level reasoner's internal state enriched with relevant runtime information and
+                functionality.
+            sender (str): `module_id` of the learner that sent the model.
+            model (Any): received learned model object.
+            **kwargs: additional keyword arguments included in the message.
+
+        Returns:
+            LLState: modified or unaltered internal state of the module.
+
+        """
+        return state
+
 
 class HLReasoner(MHAModule):
     def __init__(self,
@@ -131,16 +161,17 @@ class HLReasoner(MHAModule):
             out_id_channels.append(self.sender_reg_entry(knowledge.module_id, ConnType.send))
             in_id_channels_callbacks.append(self.recipient_reg_entry(knowledge.module_id, ConnType.send, self._receive_belief_update))
 
-        for memory in self._directory.internal.memory:
-            out_id_channels.append(self.sender_reg_entry(memory.module_id, ConnType.request))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(memory.module_id, ConnType.send, self._receive_belief_update))
-
         for goal_graph in self._directory.internal.goals:
             out_id_channels.append(self.sender_reg_entry(goal_graph.module_id, ConnType.send))
             in_id_channels_callbacks.append(self.recipient_reg_entry(goal_graph.module_id, ConnType.send, self._receive_goal_update))
 
         for actuator in self._directory.internal.actuation:
             out_id_channels.append(self.sender_reg_entry(actuator.module_id, ConnType.request))
+
+        for learner in self._directory.internal.learning:
+            out_id_channels.append(self.sender_reg_entry(learner.module_id, ConnType.request))
+            out_id_channels.append(self.sender_reg_entry(learner.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(learner.module_id, ConnType.send, self._receive_learner_model))
 
         super().__init__(
             global_params=global_params,
@@ -161,4 +192,11 @@ class HLReasoner(MHAModule):
         self.debug(f'Received goal update {msg.id} from {sender}. Processing...')
         update = self._base.on_goal_update(state=self._state, sender=sender, **msg.body)
         self.log(5, f'Finished processing goal update {msg.id}!')
+        return update
+
+    def _receive_learner_model(self, sender: str, channel: str, msg: Message) -> HLState:
+        self.debug(f'Received learned model {msg.id} from {sender}. Processing...')
+        model = msg.body.pop('model')
+        update = self._base.on_model(state=self._state, sender=sender, model=model, **msg.body)
+        self.log(5, f'Finished processing learned model {msg.id}!')
         return update

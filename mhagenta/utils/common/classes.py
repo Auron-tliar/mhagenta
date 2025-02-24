@@ -430,14 +430,15 @@ class Observation:
 
     Attributes:
         observation_type (str): type of the observation.
-        value (Any): observed object.
+        content (Any): observed object.
 
     """
-    value: Any
+    content: Any
     observation_type: Optional[str] = 'Any'
+    value: float | None = None
 
     def __str__(self) -> str:
-        return f'[{self.observation_type}] {self.value}'
+        return f'[{self.observation_type}] {self.content}'
 
 
 @dataclass

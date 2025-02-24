@@ -43,7 +43,7 @@ class GoalGraphBase(ModuleBase):
         Args:
             state (GoalGraphState): Goal graph's internal state enriched with relevant runtime information and
                 functionality.
-            sender (str): `module_id` of the module (high-level or low-level reasoner) that sent the request.
+            sender (str): `module_id` of the low-level reasoner that sent the request.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

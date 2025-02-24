@@ -1,6 +1,6 @@
 from typing import Any, Iterable, ClassVar
 
-from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Observation, State
+from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Observation, State, Belief
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
 
 
@@ -20,25 +20,11 @@ class LearnerOutbox(Outbox):
         """
         self._add(memory_id, ConnType.request, kwargs)
 
-    def send_status(self, ll_reasoner_id: str, learning_status: Any, **kwargs) -> None:
-        """Send learning status to a low-level reasoner.
-
-        Args:
-            ll_reasoner_id (str): `module_id` of the low-level reasoner to report to.
-            learning_status (Any): learning status to report.
-            **kwargs: additional keyword arguments to be included in the message.
-
-        """
-        body = {'learning_status': learning_status}
-        if kwargs:
-            body.update(kwargs)
-        self._add(ll_reasoner_id, ConnType.send, body, extension='status')
-
-    def send_model(self, ll_reasoner_id: str, model: Any, **kwargs) -> None:
+    def send_model(self, reasoner_id: str, model: Any, **kwargs) -> None:
         """Send a learned model to a low-level reasoner.
 
         Args:
-            ll_reasoner_id (str): `module_id` of the relevant low-level reasoner.
+            reasoner_id (str): `module_id` of the relevant low-level reasoner.
             model (Any): model to send.
             **kwargs: additional keyword arguments to be included in the message.
 
@@ -46,7 +32,7 @@ class LearnerOutbox(Outbox):
         body = {'model': model}
         if kwargs:
             body.update(kwargs)
-        self._add(ll_reasoner_id, ConnType.send, body, extension='model')
+        self._add(reasoner_id, ConnType.send, body, extension='model')
 
 
 LearnerState = State[LearnerOutbox]
@@ -67,7 +53,7 @@ class LearnerBase(ModuleBase):
         Args:
             state (LearnerState): Learner's internal state enriched with relevant runtime information and
                 functionality.
-            sender (str): `module_id` of the low-level reasoner that sent the learning task.
+            sender (str): `module_id` of the reasoner that sent the learning task.
             task (Any): received learning task object.
             **kwargs: additional keyword arguments included in the message.
 
@@ -77,14 +63,14 @@ class LearnerBase(ModuleBase):
         """
         return state
 
-    def on_memories(self, state: LearnerState, sender: str, observations: Iterable[Observation], **kwargs) -> LearnerState:
+    def on_memories(self, state: LearnerState, sender: str, memories: Iterable[Belief | Observation], **kwargs) -> LearnerState:
         """Override to define learner's reaction to receiving a collection of memories.
 
         Args:
             state (LearnerState): Learner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the memory structure that send the memories.
-            observations (Iterable[Observation]): received collection of memories (observation objects).
+            memories (Iterable[Belief | Observation]): received collection of memories.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -99,7 +85,7 @@ class LearnerBase(ModuleBase):
         Args:
             state (LearnerState): Learner's internal state enriched with relevant runtime information and
                 functionality.
-            sender (str): `module_id` of the low-level reasoner that sent the model request.
+            sender (str): `module_id` of the reasoner that sent the model request.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -122,10 +108,14 @@ class Learner(MHAModule):
         in_id_channels_callbacks = list()
 
         for ll_reasoner in self._directory.internal.ll_reasoning:
-            out_id_channels.append(self.sender_reg_entry(ll_reasoner.module_id, ConnType.send, extension='model'))
-            out_id_channels.append(self.sender_reg_entry(ll_reasoner.module_id, ConnType.send, extension='status'))
+            out_id_channels.append(self.sender_reg_entry(ll_reasoner.module_id, ConnType.send))
             in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner.module_id, ConnType.request, self._receive_model_request))
             in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner.module_id, ConnType.send, self._receive_task))
+
+        for hl_reasoner in self._directory.internal.hl_reasoning:
+            out_id_channels.append(self.sender_reg_entry(hl_reasoner.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner.module_id, ConnType.request, self._receive_model_request))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner.module_id, ConnType.send, self._receive_task))
 
         for memory in self._directory.internal.memory:
             out_id_channels.append(self.sender_reg_entry(memory.module_id, ConnType.request))
@@ -148,8 +138,8 @@ class Learner(MHAModule):
 
     def _receive_memories(self, sender: str, channel: str, msg: Message) -> LearnerState:
         self.debug(f'Received memories {msg.id} from {sender}. Processing...')
-        observations = msg.body.pop('observations')
-        update = self._base.on_memories(state=self._state, sender=sender, observations=observations, **msg.body)
+        memories = msg.body.pop('memories')
+        update = self._base.on_memories(state=self._state, sender=sender, memories=memories, **msg.body)
         self.log(5, f'Finished processing memories {msg.id}!')
         return update
 
