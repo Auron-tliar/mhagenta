@@ -185,6 +185,11 @@ class TagCard[T](ABC):
     def id(self) -> str:
         pass
 
+    def __eq__(self, other: str) -> bool:
+        return self.id == other
+
+
+
 class ICard(TagCard[str]):
     def __init__(self, module_id: str, module_type: str, tags: Iterable[str] | None = None) -> None:
         self.module_id = module_id
@@ -217,6 +222,9 @@ class BaseDirectory:
             return self._content[item]
         else:
             return self._by_id[item]
+
+    def __contains__(self, item: str) -> bool:
+        return item in self._by_id
 
     def search(self, tags: Iterable[str]) -> list[TagCard[str]]:
         output = list()

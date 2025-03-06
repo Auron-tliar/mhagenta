@@ -69,6 +69,8 @@ class KnowledgeBase(ModuleBase):
     def on_observed_beliefs(self, state: KnowledgeState, sender: str, observation: Observation, beliefs: Iterable[Belief], **kwargs) -> KnowledgeState:
         """Override to define knowledge model's reaction to receiving a belief update.
 
+        Forwards the observed beliefs to all high-level reasoners by default.
+
         Args:
             state (KnowledgeState): Knowledge model's internal state enriched with relevant runtime information and
                 functionality.
@@ -81,6 +83,8 @@ class KnowledgeBase(ModuleBase):
             KnowledgeState: modified or unaltered internal state of the module.
 
         """
+        for hl_reasoner in state.directory.internal.hl_reasoning:
+            state.outbox.send_beliefs(hl_reasoner_id=hl_reasoner.module_id, beliefs=beliefs)
         return state
 
     def on_belief_update(self, state: KnowledgeState, sender: str, beliefs: Iterable[Belief], **kwargs) -> KnowledgeState:

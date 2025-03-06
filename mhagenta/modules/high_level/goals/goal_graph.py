@@ -66,6 +66,12 @@ class GoalGraphBase(ModuleBase):
             GoalGraphState: modified or unaltered internal state of the module.
 
         """
+        if sender in state.directory.internal.ll_reasoning:
+            for hl_reasoner in state.directory.internal.hl_reasoning:
+                state.outbox.send_goals(receiver_id=hl_reasoner.module_id, goals=goals, **kwargs)
+        elif sender in state.directory.internal.hl_reasoning:
+            for ll_reasoner in state.directory.internal.ll_reasoning:
+                state.outbox.send_goals(receiver_id=ll_reasoner.module_id, goals=goals, **kwargs)
         return state
 
 
