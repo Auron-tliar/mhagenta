@@ -347,13 +347,19 @@ class EDirectory(BaseDirectory):
     localhost_win = 'http://host.docker.internal'
     localhost_linux = 'http://172.17.0.1'
 
+
     def __init__(self,
                  env_address: Any | None = None,
-                 env_tags: Iterable[str] | None = None
+                 env_tags: Iterable[str] | None = None,
+                 server_data: dict[str, Any] | None = None,
                  ) -> None:
         if env_address is None:
             super().__init__()
             return
+
+        if server_data is None:
+            server_data = {}
+        self._server_data = server_data
 
         tags = [self.ENVIRONMENT]
         if env_tags is not None:
@@ -414,7 +420,7 @@ class Goal:
 
     Attributes:
         state (list[Belief]): Belief-based description of the goal state.
-        misc (dict[str, Any]): keyword dictionary of additional relevant information.
+        extras (dict[str, Any]): keyword dictionary of additional relevant information.
 
     """
     state: list[Belief]
@@ -523,7 +529,7 @@ class Message:
     recipient_id: str
     ts: float | str
     performative: str
-    uuid: bytes = dataclasses.field(default_factory=lambda: uuid.uuid4())
+    uuid: bytes = dataclasses.field(default_factory=lambda: uuid.uuid4().bytes)
     short_uuid_format: bool = True
 
     def __init__(self,
@@ -556,7 +562,7 @@ class Message:
 
     @property
     def short_id(self) -> str:
-        return self.uuid.bytes[-6:].hex()
+        return self.uuid[-6:].hex()
 
 
 class Outbox(ABC):
