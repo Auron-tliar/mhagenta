@@ -6,15 +6,16 @@ import time
 from mhagenta.utils import LoggerExtras
 from mhagenta.utils.common import MHABase, DEFAULT_LOG_FORMAT, AgentTime, Message, Performatives
 from mhagenta.core import RabbitMQConnector
+from mhagenta.environment import MHAEnvironment
 
 
-class RMQEnvironment(MHABase):
+class RMQEnvironment(MHAEnvironment):
     """
     Base class for RabbitMQ-based environments
     """
 
     def __init__(self,
-                 state: dict[str, Any],
+                 state: dict[str, Any] | None = None,
                  env_id: str = "environment",
                  host: str = 'localhost',
                  port: int = 5672,
@@ -28,24 +29,17 @@ class RMQEnvironment(MHABase):
                  tags: Iterable[str] | None = None
                  ) -> None:
         super().__init__(
-            agent_id=env_id,
+            state = state,
+            env_id=env_id,
+            exec_duration=exec_duration,
+            start_time_reference=start_time_reference,
             log_id=log_id,
             log_tags=log_tags,
             log_level=log_level,
-            log_format=log_format
+            log_format=log_format,
+            tags=tags
         )
 
-        self.id = env_id
-        self.tags = list(tags)
-        if start_time_reference is None:
-            start_time_reference = time.time()
-        self.time = AgentTime(
-            agent_start_ts=start_time_reference,
-            exec_start_ts=start_time_reference
-        )
-        self._exec_duration = exec_duration
-
-        self.state = state
         self._main_task: asyncio.Task | None = None
         self._timeout_task: asyncio.Task | None = None
 
@@ -74,6 +68,7 @@ class RMQEnvironment(MHABase):
     async def start(self) -> None:
         with asyncio.TaskGroup() as tg:
             self._main_task = tg.create_task(self._connector.start())
+            tg.create_task(self._timeout())
 
     def stop(self) -> None:
         self._main_task.cancel()
@@ -99,7 +94,7 @@ class RMQEnvironment(MHABase):
         """
         return state, dict()
 
-    def on_action(self, state: dict[str, Any], sender_id: str, **kwargs) -> dict[str, Any]:
+    def on_action(self, state: dict[str, Any], sender_id: str, **kwargs) -> dict[str, Any] | tuple[dict[str, Any], dict[str, Any] | None]:
         """
         Override to define the effects of an action on the environment.
 
@@ -109,50 +104,15 @@ class RMQEnvironment(MHABase):
             **kwargs: keyword-based description of an action
 
         Returns:
-            dict[str, Any]: modified state
+            dict[str, Any] | tuple[dict[str, Any], dict[str, Any] | None]: tuple of modified state and optional keyword-based action
+            response
 
         """
         return state
 
-    def _on_request(self, sender: str, channel: str, msg: Message) -> None:
-        match msg.performative:
-            case Performatives.OBSERVE:
-                self._on_observation_request(sender, channel, msg)
-            case Performatives.ACT:
-                self._on_action_request(sender, channel, msg)
-            case _:
-                self.warning(f'Received unknown message request: {msg.performative}! Ignoring...')
-
-    def _on_observation_request(self, sender: str, channel: str, msg: Message) -> None:
-        try:
-            self.state, response = self.on_observe(state=self.state, sender_id=sender, **msg.body)
-            self._connector.send(
-                recipient=sender,
-                channel=sender,
-                msg=Message(
-                    body=msg.body,
-                    sender_id=self.id,
-                    recipient_id=sender,
-                    ts=self.time.agent,
-                    performative=Performatives.INFORM
-                )
-            )
-        except Exception as ex:
-            self.warning(f'Caught exception \"{ex}\" while processing observation request {msg.short_id} from {sender})!'
-                         f' Aborting processing and attempting to resume execution...')
-
-    def _on_action_request(self, sender: str, channel: str, msg: Message) -> None:
-        try:
-            self.state = self.on_action(state=self.state, sender_id=sender, **msg.body)
-        except Exception as ex:
-            self.warning(f'Caught exception \"{ex}\" while processing action {msg.short_id} from {sender})!'
-                         f' Aborting processing and attempting to resume execution...')
-
-    @property
-    def _logger_extras(self) -> LoggerExtras | None:
-        return LoggerExtras(
-            agent_time=self.time.agent,
-            mod_time=self.time.module,
-            exec_time=str(self.time.exec) if self.time.exec is not None else '-',
-            tags=self.log_tag_str
+    def send_response(self, recipient_id: str, channel: str, msg: Message, **kwargs) -> None:
+        self._connector.send(
+            recipient=recipient_id,
+            channel=recipient_id,
+            msg=msg
         )

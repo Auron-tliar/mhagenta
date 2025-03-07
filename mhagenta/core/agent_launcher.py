@@ -4,11 +4,12 @@ import asyncio
 from typing import Any
 import importlib.metadata
 
-from mhagenta.core.processes import MHARoot
+from mhagenta.core.processes.mha_root import MHARoot
 from mhagenta.modules import *
 from mhagenta.states import *
 from mhagenta.utils import ModuleTypes, Observation, ActionStatus
-from mhagenta.core.processes import run_agent_module, MHAModule, ModuleBase, GlobalParams
+from mhagenta.core.processes import run_agent_module, GlobalParams
+from mhagenta.core.processes.mha_module import MHAModule, ModuleBase
 from mhagenta.bases import *
 
 

@@ -202,7 +202,7 @@ class ICard(TagCard[str]):
 
 
 class ECard(TagCard[str]):
-    def __init__(self, agent_id: str, address: Any, tags: Iterable[str] | None = None) -> None:
+    def __init__(self, agent_id: str, address: dict[str, Any], tags: Iterable[str] | None = None) -> None:
         self.agent_id = agent_id
         self.address = address
         super().__init__(tags if tags is not None else tuple())
@@ -357,17 +357,12 @@ class EDirectory(BaseDirectory):
 
 
     def __init__(self,
-                 env_address: Any | None = None,
-                 env_tags: Iterable[str] | None = None,
-                 server_data: dict[str, Any] | None = None,
+                 env_address: dict[str, Any] | None = None,
+                 env_tags: Iterable[str] | None = None
                  ) -> None:
         if env_address is None:
             super().__init__()
             return
-
-        if server_data is None:
-            server_data = {}
-        self._server_data = server_data
 
         tags = [self.ENVIRONMENT]
         if env_tags is not None:

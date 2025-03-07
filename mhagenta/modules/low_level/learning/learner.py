@@ -32,7 +32,7 @@ class LearnerOutbox(Outbox):
         body = {'model': model}
         if kwargs:
             body.update(kwargs)
-        self._add(reasoner_id, ConnType.send, body, extension='model')
+        self._add(reasoner_id, ConnType.send, body)
 
 
 LearnerState = State[LearnerOutbox]
