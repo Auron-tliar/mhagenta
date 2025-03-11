@@ -131,7 +131,7 @@ class TestData:
                 'step',
                 'on_observation',
                 'on_action_status',
-                'on_goal_update'
+                'on_goal_update',
                 'on_model'
             },
             'received_from': set()
@@ -356,7 +356,6 @@ class TestData:
                 ('on_goal_request', ll_reasoner, 'on_observation', module_id),
                 ('on_goal_request', ll_reasoner, 'on_action_status', module_id),
                 ('on_goal_request', ll_reasoner, 'on_goal_update', module_id),
-                ('on_goal_request', ll_reasoner, 'on_learning_status', module_id),
                 ('on_goal_request', ll_reasoner, 'on_model', module_id)
             })
 
@@ -383,10 +382,10 @@ class TestData:
 
         for learner in self.learners:
             expected['received_from'].update({
-                ('on_observation_request', learner, 'step', module_id),
-                ('on_observation_request', learner, 'on_task', module_id),
-                ('on_observation_request', learner, 'on_memories', module_id),
-                ('on_observation_request', learner, 'on_model_request', module_id)
+                ('on_memory_request', learner, 'step', module_id),
+                ('on_memory_request', learner, 'on_task', module_id),
+                ('on_memory_request', learner, 'on_memories', module_id),
+                ('on_memory_request', learner, 'on_model_request', module_id)
             })
 
         for knowledge in self.knowledge:
@@ -394,7 +393,12 @@ class TestData:
                 ('on_belief_update', knowledge, 'step', module_id),
                 ('on_belief_update', knowledge, 'on_belief_request', module_id),
                 ('on_belief_update', knowledge, 'on_belief_update', module_id),
-                ('on_belief_update', knowledge, 'on_observed_beliefs', module_id)
+                ('on_belief_update', knowledge, 'on_observed_beliefs', module_id),
+
+                ('on_observation_update', knowledge, 'step', module_id),
+                ('on_observation_update', knowledge, 'on_belief_request', module_id),
+                ('on_observation_update', knowledge, 'on_belief_update', module_id),
+                ('on_observation_update', knowledge, 'on_observed_beliefs', module_id)
             })
 
         return expected
@@ -489,7 +493,7 @@ class TestLearner(LearnerBase, BaseAuxiliary):
     def on_task(self, state: LearnerState, sender: str, task: Any, **kwargs) -> LearnerState:
         return self.process_and_send(self.on_task.__name__, state, kwargs['signature'])
 
-    def on_memories(self, state: LearnerState, sender: str, observations: Iterable[Observation], **kwargs) -> LearnerState:
+    def on_memories(self, state: LearnerState, sender: str, memories: Iterable[Belief | Observation], **kwargs) -> LearnerState:
         return self.process_and_send(self.on_memories.__name__, state, kwargs['signature'])
 
     def on_model_request(self, state: LearnerState, sender: str, **kwargs) -> LearnerState:
@@ -602,7 +606,7 @@ def check_module_result(
         actual_steps: int,
         expected_steps: int) -> int:
     print(f'\t\t{module_id}...')
-    result = (actual_state == expected_state) and actual_steps >= expected_steps
+    result = actual_state['sent_from'] == expected_state['sent_from'] and actual_state['received_from'] == expected_state['received_from'] and actual_steps >= expected_steps
     if result:
         print('\t\t\t...SUCCEEDED!')
         return 1
@@ -743,7 +747,16 @@ if __name__ == '__main__':
 
     agent_id = 'test_agent'
 
-    test_data = TestData(save_format='dill')
+    test_data = TestData(save_format='dill',
+                         n_perceptors=3,
+                         n_actuators=3,
+                         n_ll_reasoners=3,
+                         n_learners=3,
+                         n_knowledge=3,
+                         n_hl_reasoners=3,
+                         n_goal_graphs=3,
+                         n_memory=3
+                         )
 
     orchestrator = Orchestrator(
         save_dir=save_dir,

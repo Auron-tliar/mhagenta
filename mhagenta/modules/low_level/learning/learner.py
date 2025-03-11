@@ -24,7 +24,7 @@ class LearnerOutbox(Outbox):
         """Send a learned model to a low-level reasoner.
 
         Args:
-            reasoner_id (str): `module_id` of the relevant low-level reasoner.
+            reasoner_id (str): `module_id` of the relevant reasoner.
             model (Any): model to send.
             **kwargs: additional keyword arguments to be included in the message.
 
