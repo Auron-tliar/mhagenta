@@ -1,4 +1,4 @@
-from typing import Iterable, ClassVar
+from typing import Iterable, ClassVar, Any
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Observation, Belief, State
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
@@ -10,33 +10,19 @@ class MemoryOutbox(Outbox):
     Used to store and process outgoing messages to other modules.
 
     """
-    def send_observations(self, learner_id: str, observations: Iterable[Observation], **kwargs) -> None:
-        """Send observation memories to a learner.
+    def send_memories(self, learner_id: str, memories: Iterable[Belief | Observation], **kwargs) -> None:
+        """Send observation or belief memories to a learner.
 
         Args:
             learner_id (str): `module_id` of the relevant learner.
-            observations (Iterable[Observation]): A collection of observations to send.
+            memories (Iterable[Belief | Observation]): A collection of observations or memories to send.
             **kwargs: additional keyword arguments to be included in the message.
 
         """
-        body = {'observations': observations}
+        body = {'memories': memories}
         if kwargs:
             body.update(kwargs)
         self._add(learner_id, ConnType.send, body)
-
-    def send_beliefs(self, hl_reasoner_id: str, beliefs: Iterable[Belief], **kwargs) -> None:
-        """Send belief memories to a high-level reasoner.
-
-        Args:
-            hl_reasoner_id (str): `module_id` of the relevant high-level reasoner.
-            beliefs (Iterable[Belief]): A collection of beliefs to send.
-            **kwargs: additional keyword arguments to be included in the message.
-
-        """
-        body = {'beliefs': beliefs}
-        if kwargs:
-            body.update(kwargs)
-        self._add(hl_reasoner_id, ConnType.send, body)
 
 
 MemoryState = State[MemoryOutbox]
@@ -51,8 +37,8 @@ class MemoryBase(ModuleBase):
     """
     module_type: ClassVar[str] = ModuleTypes.MEMORY
 
-    def on_observation_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
-        """Override to define memory structure's reaction to receiving a request for observation memories.
+    def on_memory_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
+        """Override to define memory structure's reaction to receiving a request for memories.
 
         Args:
             state (MemoryState): Memory structure's internal state enriched with relevant runtime information and
@@ -66,29 +52,14 @@ class MemoryBase(ModuleBase):
         """
         return state
 
-    def on_belief_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
-        """Override to define memory structure's reaction to receiving a request for belief memories.
-
-        Args:
-            state (MemoryState): Memory structure's internal state enriched with relevant runtime information and
-                functionality.
-            sender (str): `module_id` of the knowledge model that sent the request.
-            **kwargs: additional keyword arguments included in the message.
-
-        Returns:
-            MemoryState: modified or unaltered internal state of the module.
-
-        """
-        return state
-
     def on_observation_update(self, state: MemoryState, sender: str, observations: Iterable[Observation], **kwargs) -> MemoryState:
-        """Override to define memory structure's reaction to receiving an update of observation memories.
+        """Override to define memory structure's reaction to receiving an update of evaluated observations.
 
         Args:
             state (MemoryState): Memory structure's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the low-level reasoner that sent the update.
-            observations (Iterable[Observation]): received collection of observations.
+            observations (Iterable[Observation]): received collection of evaluated observations.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -126,19 +97,13 @@ class Memory(MHAModule):
         out_id_channels = list()
         in_id_channels_callbacks = list()
 
-        for ll_reasoner in self._directory.ll_reasoning:
-            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner, ConnType.send, self._receive_observations))
+        for learner in self._directory.internal.learning:
+            out_id_channels.append(self.sender_reg_entry(learner.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(learner.module_id, ConnType.request, self._receive_memories_request))
 
-        for learner in self._directory.learning:
-            out_id_channels.append(self.sender_reg_entry(learner, ConnType.send))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(learner, ConnType.request, self._receive_observation_request))
-
-        for knowledge in self._directory.knowledge:
-            in_id_channels_callbacks.append(self.recipient_reg_entry(knowledge, ConnType.send, self._receive_beliefs))
-
-        for hl_reasoner in self._directory.hl_reasoning:
-            out_id_channels.append(self.sender_reg_entry(hl_reasoner, ConnType.send))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner, ConnType.request, self._receive_belief_request))
+        for knowledge in self._directory.internal.knowledge:
+            in_id_channels_callbacks.append(self.recipient_reg_entry(knowledge.module_id, ConnType.send, self._receive_observations, 'observations'))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(knowledge.module_id, ConnType.send, self._receive_beliefs, 'beliefs'))
 
         super().__init__(
             global_params=global_params,
@@ -162,14 +127,8 @@ class Memory(MHAModule):
         self.log(5, f'Finished processing belief update {msg.id}!')
         return update
 
-    def _receive_observation_request(self, sender: str, channel: str, msg: Message) -> MemoryState:
-        self.debug(f'Received observation request {msg.id} from {sender}. Processing...')
-        update = self._base.on_observation_request(state=self._state, sender=sender, **msg.body)
-        self.log(5, f'Finished processing observation request {msg.id}!')
-        return update
-
-    def _receive_belief_request(self, sender: str, channel: str, msg: Message) -> MemoryState:
-        self.debug(f'Received belief request {msg.id} from {sender}. Processing...')
-        update = self._base.on_belief_request(state=self._state, sender=sender, **msg.body)
-        self.log(5, f'Finished processing belief request {msg.id}!')
+    def _receive_memories_request(self, sender: str, channel: str, msg: Message) -> MemoryState:
+        self.debug(f'Received memories request {msg.id} from {sender}. Processing...')
+        update = self._base.on_memory_request(state=self._state, sender=sender, **msg.body)
+        self.log(5, f'Finished processing memories request {msg.id}!')
         return update

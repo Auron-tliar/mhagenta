@@ -3,12 +3,13 @@ import logging
 import subprocess
 import sys
 import time
+from argparse import ArgumentError
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
 import dill
 
-from mhagenta.utils import AgentCmd, StatusReport, Directory
+from mhagenta.utils import AgentCmd, StatusReport, Directory, ModuleTypes
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT
 from mhagenta.core.connection import RootMessenger, Connector
 from mhagenta.core.processes.process import MHAProcess
@@ -24,7 +25,7 @@ def initialize_module(
 ) -> subprocess.Popen:
     if isinstance(path, str):
         path = Path(path)
-    path = path.absolute()
+    path = path.resolve()
     if path.is_dir():
         path = path / base.module_id
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -42,9 +43,9 @@ def initialize_module(
         dill.dump(params, f)
 
     return subprocess.Popen([
-        f'{Path(sys.executable).absolute()}',
-        f'{(Path(__file__).parent.parent / "module_launcher.py").absolute()}',
-        f'\"{path.absolute()}\"'],
+        f'{Path(sys.executable).resolve()}',
+        f'{(Path(__file__).parent.parent / "module_launcher.py").resolve()}',
+        f'\"{path.resolve()}\"'],
         stdout=subprocess.PIPE if merge_output else None,
         stderr=subprocess.STDOUT if merge_output else None
     )
@@ -63,9 +64,11 @@ class MHARoot(MHAProcess):
     def __init__(self,
                  agent_id: str,
                  connector_cls: type[Connector],
-                 perceptors: Iterable[PerceptorBase] | PerceptorBase,
-                 actuators: Iterable[ActuatorBase] | ActuatorBase,
-                 ll_reasoners: Iterable[LLReasonerBase] | LLReasonerBase,
+                 directory: Directory,
+                 modules: Iterable[ModuleBase] | None = None,
+                 perceptors: Iterable[PerceptorBase] | PerceptorBase | None = None,
+                 actuators: Iterable[ActuatorBase] | ActuatorBase | None = None,
+                 ll_reasoners: Iterable[LLReasonerBase] | LLReasonerBase | None = None,
                  learners: Iterable[LearnerBase] | LearnerBase | None = None,
                  knowledge: Iterable[KnowledgeBase] | KnowledgeBase | None = None,
                  hl_reasoners: Iterable[HLReasonerBase] | HLReasonerBase | None = None,
@@ -85,9 +88,10 @@ class MHARoot(MHAProcess):
                  log_format: str = DEFAULT_LOG_FORMAT,
                  status_msg_format: str = '[status_upd]::{}'
                  ) -> None:
+        agent_start_time = time.time()
         super().__init__(
             agent_id=agent_id,
-            agent_start_time=time.time(),
+            agent_start_time=agent_start_time,
             exec_start_time=None,
             init_timeout=60.,
             exec_duration=exec_duration,
@@ -99,16 +103,26 @@ class MHARoot(MHAProcess):
         )
         self._expected_start_time = exec_start_time
 
-        self._directory = Directory(
-            perception=self.extract_module_names(perceptors),
-            actuation=self.extract_module_names(actuators),
-            ll_reasoning=self.extract_module_names(ll_reasoners),
-            learning=self.extract_module_names(learners),
-            knowledge=self.extract_module_names(knowledge),
-            hl_reasoning=self.extract_module_names(hl_reasoners),
-            goals=self.extract_module_names(goal_graphs),
-            memory=self.extract_module_names(memory),
-        )
+        if modules is None:
+            modules: list[ModuleBase] = list()
+        else:
+            modules = list(modules)
+        self._extend_modules_list(modules, perceptors)
+        self._extend_modules_list(modules, actuators)
+        self._extend_modules_list(modules, ll_reasoners)
+        self._extend_modules_list(modules, learners)
+        self._extend_modules_list(modules, knowledge)
+        self._extend_modules_list(modules, hl_reasoners)
+        self._extend_modules_list(modules, goal_graphs)
+        self._extend_modules_list(modules, memory)
+
+        self._directory = directory
+        for module in modules:
+            self._directory.internal._add_module(module.module_id, module.module_type, module.tags)
+
+        if not modules:
+            raise ValueError('No modules specified!')
+
         self._status_msg_format = status_msg_format
         self._modules: dict[str, MHARoot.ModuleData] = dict()
 
@@ -130,9 +144,9 @@ class MHARoot(MHAProcess):
             step_frequency=step_frequency,
             status_frequency=status_frequency,
             control_frequency=control_frequency,
-            agent_start_time=self._time.system,
+            agent_start_time=agent_start_time,
             exec_duration=exec_duration,
-            save_dir=str(save_dir.absolute()) if isinstance(save_dir, Path) else save_dir,
+            save_dir=str(save_dir.resolve()) if isinstance(save_dir, Path) else save_dir,
             save_format=save_format,
             resume=resume,
             log_level=log_level,
@@ -150,14 +164,7 @@ class MHARoot(MHAProcess):
             **connector_kwargs
         )
 
-        self._add_modules(perceptors)
-        self._add_modules(actuators)
-        self._add_modules(ll_reasoners)
-        self._add_modules(learners)
-        self._add_modules(knowledge)
-        self._add_modules(hl_reasoners)
-        self._add_modules(goal_graphs)
-        self._add_modules(memory)
+        self._add_modules(modules)
 
     async def on_init(self) -> None:
         self.debug('Initializing messenger...')
@@ -198,7 +205,7 @@ class MHARoot(MHAProcess):
             periodic=True,
             frequency=self._control_frequency,
             stop_condition=lambda: all([module.ready for module in self._modules.values()]),
-            delay=self._start_delay
+            # delay=self._start_delay
         )
 
     def cmd(self, cmd: AgentCmd) -> None:
@@ -250,21 +257,22 @@ class MHARoot(MHAProcess):
             )
             self.debug(f'Module {module_id} initialized!')
 
-    def synchronous_start(self, delay: float = 0.) -> None:
+    def synchronous_start(self) -> None:
         if not all([module.ready for module in self._modules.values()]):
             return
 
+        # self.debug(f'>>>>> Current time: {self._time.system}, time.time: {time.time()}, expected: {self._expected_start_time}, delay: {self._start_delay}, current - delayed start: {self._time.system - (self._expected_start_time + self._start_delay)}')
         self._time.set_exec_start_ts(
             max(
                 self._time.system,
-                self._expected_start_time + delay
+                self._expected_start_time + self._start_delay
             ))
         self._stop_time = self._time.exec_start_ts - self._time.agent_start_ts + self._global_params.exec_duration
-        self.info('Starting execution!')
+        self.info(f'Starting execution! Scheduling module execution start at {self._time.exec_start_ts} ({self._time.exec_start_ts - self._time.system} seconds from now)...')
         self.cmd(AgentCmd(
             agent_id=self._agent_id,
             cmd=AgentCmd.START,
-            args={'start_ts': self._time.exec_start_ts - self._time.agent_start_ts}
+            args={'start_ts': self._time.exec_start_ts}  # - self._time.agent_start_ts}
         ))
 
     def stop_exec(self, reason: str = 'AGENT TIMEOUT CMD') -> None:
@@ -310,14 +318,13 @@ class MHARoot(MHAProcess):
         self.error(self._format_exception(error))
 
     @staticmethod
-    def extract_module_names(modules: Iterable[ModuleBase] | ModuleBase | None) -> list[str] | None:
-        if modules is None:
-            return None
-
-        if isinstance(modules, ModuleBase):
-            return [modules.module_id]
-
-        return [module.module_id for module in modules]
+    def _extend_modules_list(modules: list[ModuleBase], items: Iterable[ModuleBase] | ModuleBase | None) -> None:
+        if items is None:
+            return
+        if isinstance(items, ModuleBase):
+            modules.append(items)
+        else:
+            modules.extend(items)
 
     @property
     def agent_id(self) -> str:

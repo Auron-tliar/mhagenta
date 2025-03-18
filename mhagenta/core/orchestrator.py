@@ -1,15 +1,25 @@
 import asyncio
 import logging
+import os
 import shutil
+import sys
 import time
 from asyncio import TaskGroup
 from dataclasses import dataclass
 from io import TextIOWrapper
+from os import PathLike
+import socket
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, Self
+import subprocess
+import signal
 
 import dill
 import docker
+import pika
+from pika.adapters import BlockingConnection
+from pika.channel import Channel
+from pika.exceptions import AMQPConnectionError
 from docker.errors import NotFound
 from docker.models.containers import Container
 from docker.models.images import Image
@@ -18,9 +28,12 @@ import mhagenta
 from mhagenta.bases import *
 from mhagenta.containers import *
 from mhagenta.core.connection import Connector, RabbitMQConnector
-from mhagenta.utils.common import DEFAULT_LOG_FORMAT
-
+from mhagenta.utils import DEFAULT_PORT, DEFAULT_RMQ_IMAGE
+from mhagenta.utils.common import DEFAULT_LOG_FORMAT, Directory
+from mhagenta.environment import MHAEnvBase
+# from mhagenta.utils.common.classes import EDirectory
 from mhagenta.gui import Monitor
+from mhagenta.utils.common.classes import EDirectory
 
 
 @dataclass
@@ -33,6 +46,9 @@ class AgentEntry:
     container: Container | None = None
     port_mapping: dict[int, int] | None = None
     num_copies: int = 1
+    save_logs: bool = True
+    tags: Iterable[str] | None = None
+    # port: int | None = None
 
     @property
     def module_ids(self) -> list[str]:
@@ -55,7 +71,13 @@ class AgentEntry:
                 module_ids.append(self.kwargs[key].module_id)
         return module_ids
 
-
+@dataclass
+class EnvironmentEntry:
+    environment: dict[str, Any]
+    address: dict[str, Any]
+    dir: Path | None = None
+    tags: list[str] | None = None
+    process: subprocess.Popen | None = None
 
 
 class Orchestrator:
@@ -69,13 +91,13 @@ class Orchestrator:
     LOG_CHECK_FREQ = 1.
 
     def __init__(self,
-                 save_dir: str | Path,
+                 save_dir: str | PathLike,
                  port_mapping: dict[int, int] | None = None,
                  step_frequency: float = 1.,
                  status_frequency: float = 5.,
                  control_frequency: float = -1.,
                  exec_start_time: float | None = None,
-                 agent_start_delay: float = 5.,
+                 agent_start_delay: float = 60.,
                  exec_duration: float = 60.,
                  save_format: Literal['json', 'dill'] = 'json',
                  resume: bool = False,
@@ -85,14 +107,16 @@ class Orchestrator:
                  module_start_delay: float = 2.,
                  connector_cls: type[Connector] = RabbitMQConnector,
                  connector_kwargs: dict[str, Any] | None = None,
-                 prerelease: bool = False,
+                 mas_rmq_uri: str | Literal['default'] | None = None,
+                 mas_rmq_close_on_exit: bool = True,
+                 mas_rmq_exchange_name: str | None = None,
                  save_logs: bool = True
                  ) -> None:
         """
         Constructor method for Orchestrator.
 
         Args:
-            save_dir (str | Path): Root directory for storing agents' states, logs, and temporary files.
+            save_dir (str | PathLike): Root directory for storing agents' states, logs, and temporary files.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
             step_frequency (float, optional, default=1.0): For agent modules with periodic step functions, the
                 frequency in seconds of the step function calls that modules will try to maintain (unless their
@@ -106,7 +130,7 @@ class Orchestrator:
                 start (unless agent's initialization takes longer than that; in this case the agent will start
                 execution as soon as it finishes initializing). If not specified, agents will start execution
                 immediately after their initialization.
-            agent_start_delay (float, optional, default=5.0): Delay in seconds before agents starts execution. Use when
+            agent_start_delay (float, optional, default=60.0): Delay in seconds before agents starts execution. Use when
                 `exec_start_time` is not defined to stage synchronous agents start at `agent_start_delay` seconds from
                 the `run()` or `arun()` call.
             exec_duration (float, optional, default=60.0):  Time limit for agent execution in seconds. All agents will
@@ -124,20 +148,28 @@ class Orchestrator:
                 implements communication between modules. MHAgentA agents use RabbitMQ-based connectors by default.
             connector_kwargs (dict[str, Any], optional): Additional keyword arguments for connector. For
                 RabbitMQConnector, the default parameters are: {`host`: 'localhost', `port`: 5672, `prefetch_count`: 1}.
-            prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
-                version of mhagenta while building the container.
+            mas_rmq_uri (str, optional): URI of RabbitMQ server for multi-agent communication. Will try to start
+                a RabbitMQ docker server at localhost:5672 if 'default'.
+            mas_rmq_close_on_exit (bool, optional, default=True): Whether to close RabbitMQ server when exiting.
+            mas_rmq_exchange_name (str, optional): Name of RabbitMQ exchange for inter-agent communication.
+                Defaults to 'mhagenta'.
             save_logs (bool, optional, default=True): Whether to save agent logs. If True, saves each agent's logs to
                 `<agent_id>.log` at the root of the `save_dir`. Defaults to True.
         """
-        self._agents: dict[str, AgentEntry] = dict()
+        if os.name != 'nt' and os.name != 'posix':
+            raise RuntimeError(f'OS {os.name} is not supported.')
 
+        self._agents: dict[str, AgentEntry] = dict()
+        self._environment: EnvironmentEntry | None = None
+
+        save_dir = Path(save_dir).resolve()
         if isinstance(save_dir, str):
             save_dir = Path(save_dir)
         if not save_dir.exists():
             save_dir.mkdir(parents=True, exist_ok=True)
         self._save_dir = save_dir
 
-        self._package_dir = str(Path(mhagenta.__file__).parent.absolute())
+        self._package_dir = str(Path(mhagenta.__file__).parent.resolve())
 
         self._connector_cls = connector_cls if connector_cls else RabbitMQConnector
         if connector_kwargs is None and connector_cls == RabbitMQConnector:
@@ -166,8 +198,15 @@ class Orchestrator:
         self._log_format = log_format if log_format else DEFAULT_LOG_FORMAT
         self._status_msg_format = status_msg_format
 
-        self._prerelease = prerelease
         self._save_logs = save_logs
+
+        self._mas_rmq_uri = mas_rmq_uri if mas_rmq_uri != 'default' else 'localhost:5672'
+        self._mas_rmq_uri_internal = mas_rmq_uri if mas_rmq_uri != 'default' else 'localhost:5672'
+        if 'localhost' in self._mas_rmq_uri_internal:
+            self._mas_rmq_uri_internal = self._mas_rmq_uri_internal.replace('localhost', EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win)
+        self._mas_rmq_close_on_exit = mas_rmq_close_on_exit
+        self._mas_rmq_container: Container | None = None
+        self._mas_rmq_exchange_name = mas_rmq_exchange_name
 
         self._start_time: float = -1.
         self._simulation_end_ts = -1.
@@ -189,6 +228,58 @@ class Orchestrator:
 
     def _docker_init(self) -> None:
         self._docker_client = docker.from_env()
+
+    def set_environment(self,
+                        base: MHAEnvBase,
+                        env_id: str = "environment",
+                        host: str | None = 'localhost',
+                        port: int | None = 5672,
+                        exec_duration: float | None = None,
+                        exchange_name: str | None = None,
+                        log_tags: list[str] | None = None,
+                        log_level: int | str = logging.DEBUG,
+                        log_format: str | None = None,
+                        tags: Iterable[str] | None = None
+                        ) -> None:
+        from mhagenta.defaults.communication.rabbitmq import RMQEnvironment
+        if host is None:
+            mas_host, mas_port = self._mas_rmq_uri.split(':')
+            host = mas_host
+            if port is None:
+                port = mas_port
+        # if host == 'localhost':
+        #     if sys.platform == 'linux':
+        #         host = EDirectory.localhost_linux
+        #     else:
+        #         host = EDirectory.localhost_win
+        env_dir = self._save_dir.resolve() / env_id
+        env_dir.mkdir(parents=True, exist_ok=True)
+        environment = {
+            'env_class': RMQEnvironment,
+            'base': base,
+            'env_id': env_id,
+            'host': host,
+            'port': port,
+            'exec_duration': (exec_duration if exec_duration else self._exec_duration_sec) + self._agent_start_delay,
+            'exchange_name': exchange_name if exchange_name is not None else self._mas_rmq_exchange_name,
+            'start_time_reference': None,
+            'save_dir': env_dir,
+            'save_format': self._save_format,
+            'log_id': env_id,
+            'log_tags': log_tags if log_tags is not None else [],
+            'log_format': log_format if log_format is not None else self._log_format,
+            'log_level': log_level if log_level is not None else self._log_level,
+            'tags': tags
+        }
+        self._environment = EnvironmentEntry(
+            environment=environment,
+            address={
+                'exchange_name': environment['exchange_name'],
+                'env_id': env_id
+            },
+            dir=env_dir,
+            tags=tags
+        )
 
     def add_agent(self,
                   agent_id: str,
@@ -212,7 +303,8 @@ class Orchestrator:
                   port_mapping: dict[int, int] | None = None,
                   connector_cls: type[Connector] | None = None,
                   connector_kwargs: dict[str, Any] | None = None,
-                  save_logs: bool | None = None
+                  save_logs: bool | None = None,
+                  tags: Iterable[str] | None = None
                   ) -> None:
         """Define an agent model to be added to the execution.
 
@@ -257,8 +349,18 @@ class Orchestrator:
                 the Orchestrator's `connector_kwargs`.
             save_logs (bool, optional): Whether to save agent logs. If True, saves the agent's logs to
                 `<agent_id>.log` at the root of the `save_dir`. Defaults to the orchestrator's `save_logs`.
+            tags (Iterable[str], optional): a list of tags associated with this agent for directory search.
 
         """
+        for actuator in actuators:
+            if 'external' in actuator.tags:
+                if actuator.conn_params['host'] == 'localhost':
+                    actuator.conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
+        for perceptor in perceptors:
+            if 'external' in perceptor.tags:
+                if perceptor.conn_params['host'] == 'localhost':
+                    perceptor.conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
+
         kwargs = {
             'agent_id': agent_id,
             'connector_cls': connector_cls if connector_cls else self._connector_cls,
@@ -277,7 +379,7 @@ class Orchestrator:
             'exec_start_time': self._exec_start_time if exec_start_time is None else exec_start_time,
             'start_delay': start_delay,
             'exec_duration': self._exec_duration_sec if exec_duration is None else exec_duration,
-            'save_dir': f'/{self.SAVE_SUBDIR}/{agent_id}',
+            'save_dir': f'/{self.SAVE_SUBDIR}',
             'save_format': self._save_format,
             'resume': self._resume if resume is None else resume,
             'log_level': self._log_level if log_level is None else log_level,
@@ -289,84 +391,140 @@ class Orchestrator:
             agent_id=agent_id,
             port_mapping=port_mapping if port_mapping else self._port_mapping,
             num_copies=num_copies,
-            kwargs=kwargs
+            kwargs=kwargs,
+            save_logs=save_logs if save_logs is not None else self._save_logs,
+            tags=tags
         )
         if self._task_group is not None:
             self._task_group.create_task(self._run_agent(self._agents[agent_id], force_run=self._force_run))
 
+    def _compose_directory(self) -> Directory:
+        if self._environment is not None:
+            directory = Directory(self._environment.address, self._environment.tags)
+        else:
+            directory = Directory()
+
+        host, port = self._mas_rmq_uri_internal.split(':')
+
+        for agent in self._agents.values():
+            directory.external.add_agent(
+                agent_id=agent.agent_id,
+                address={
+                    'exchange_name': self._mas_rmq_exchange_name,
+                    'agent_id': agent.agent_id,
+                    'host': host,
+                    'port': port
+                },
+                tags=agent.tags
+            )
+
+        return directory
+
     def _docker_build_base(self,
-                           rabbitmq_image_name: str = 'mha-rabbitmq',
-                           mha_base_image_name: str = 'mha-base',
-                           version_tag: str | None = None
+                           mhagenta_version: str = '1.1.1',
+                           local_build: PathLike | None = None,
+                           prerelease: bool = False
                            ) -> None:
-        if version_tag is None:
-            version_tag = CONTAINER_VERSION
-        print(f'===== BUILDING RABBITMQ BASE IMAGE: {rabbitmq_image_name}:{version_tag} =====')
-        if self._rabbitmq_image is None:
-            self._rabbitmq_image, _ = (
-                self._docker_client.images.build(path=RABBIT_IMG_PATH,
-                                                 tag=f'{rabbitmq_image_name}:{version_tag}',
-                                                 rm=True,
-                                                 quiet=False
-                                                 ))
+        if not mhagenta_version:
+            mhagenta_version = CONTAINER_VERSION
+        try:
+            print(f'===== PULLING RABBITMQ BASE IMAGE: {REPO}:rmq =====')
+            self._docker_client.images.pull(REPO, tag='rmq')
+        except docker.errors.ImageNotFound:
+            print('Pulling failed...')
+            print(f'===== BUILDING RABBITMQ BASE IMAGE: {REPO}:rmq =====')
+            if self._rabbitmq_image is None:
+                self._rabbitmq_image, _ = (
+                    self._docker_client.images.build(path=RABBIT_IMG_PATH,
+                                                     tag=f'{REPO}:rmq',
+                                                     rm=True,
+                                                     quiet=False
+                                                     ))
 
-        print(f'===== BUILDING AGENT BASE IMAGE: {mha_base_image_name}:{version_tag} =====')
         if self._base_image is None:
+            print(f'===== LOOKING FOR AGENT BASE IMAGE: {REPO}:{mhagenta_version} =====')
             try:
-                self._base_image = self._docker_client.images.list(name=f'{mha_base_image_name}:{version_tag}')[0]
+                self._base_image = self._docker_client.images.list(name=f'{REPO}:{mhagenta_version}')[0]
             except IndexError:
-                build_dir = self._save_dir.absolute() / 'tmp/'
+                print('\tIMAGE NOT FOUND LOCALLY...')
+                if local_build is None:
+                    print(f'===== PULLING AGENT BASE IMAGE: {REPO}:{mhagenta_version} =====')
+                    try:
+                        self._base_image = self._docker_client.images.pull(REPO, mhagenta_version)
+                        print('\tSUCCESSFULLY PULLED THE IMAGE!')
+                        return
+                    except docker.errors.ImageNotFound:
+                        print('\tPULLING AGENT BASE IMAGE FAILED...')
+                build_dir = self._save_dir.resolve() / 'tmp' / 'mha-base'
                 try:
-                    shutil.copytree(BASE_IMG_PATH, build_dir)
-                    shutil.copytree(self._package_dir, build_dir / 'mhagenta')
-
+                    print(f'===== BUILDING AGENT BASE IMAGE: {REPO}:{mhagenta_version} =====')
+                    shutil.copytree(BASE_IMG_PATH, build_dir, dirs_exist_ok=True)
+                    if local_build is not None:
+                        local_build = Path(local_build).resolve()
+                        shutil.copytree(local_build / 'mhagenta', build_dir / 'mha-local' / 'mhagenta')
+                        shutil.copy(local_build / 'pyproject.toml', build_dir / 'mha-local' / 'pyproject.toml')
+                        shutil.copy(local_build / 'README.md', build_dir / 'mha-local' / 'README.md')
+                    else:
+                        (build_dir / 'mha-local').mkdir(parents=True, exist_ok=True)
                     self._base_image, _ = (
-                        self._docker_client.images.build(path=str(build_dir),
-                                                         buildargs={
-                                                             'SRC_IMAGE': rabbitmq_image_name,
-                                                             'SRC_VERSION': version_tag,
-                                                             'PRE_VERSION': "true" if self._prerelease else "false"
-                                                         },
-                                                         tag=f'{mha_base_image_name}:{version_tag}',
-                                                         rm=True,
-                                                         quiet=False
-                                                         ))
+                        self._docker_client.images.build(
+                            path=str(build_dir),
+                            buildargs={
+                                'SRC_IMAGE': REPO,
+                                'SRC_TAG': 'rmq',
+                                'PRE_VERSION': "true" if prerelease else "false",
+                                'LOCAL': "false" if local_build is None else "true",
+                            },
+                            tag=f'{REPO}:{mhagenta_version}',
+                            rm=True,
+                            quiet=False
+                        ))
                 except Exception as ex:
                     shutil.rmtree(build_dir, ignore_errors=True)
                     raise ex
                 shutil.rmtree(build_dir)
 
     def _docker_build_agent(self,
-                            agent: AgentEntry
+                            agent: AgentEntry,
+                            rebuild_image: bool = True,
                             ) -> None:
+        if rebuild_image:
+            try:
+                img = self._docker_client.images.list(name=f'mhagent:{agent.agent_id}')[0]
+                img.remove(force=True)
+            except IndexError:
+                pass
         print(f'===== BUILDING AGENT IMAGE: mhagent:{agent.agent_id} =====')
-        agent_dir = self._save_dir.absolute() / agent.agent_id
+        agent_dir = self._save_dir.resolve() / agent.agent_id
         if self._force_run and agent_dir.exists():
             shutil.rmtree(agent_dir)
 
         (agent_dir / 'out/').mkdir(parents=True)
         agent.dir = agent_dir
-        agent.save_dir = agent_dir / 'out' / 'save' / agent.agent_id
+        agent.save_dir = agent_dir / 'out' / 'save'
 
         build_dir = agent_dir / 'tmp/'
-        shutil.copytree(AGENT_IMG_PATH, build_dir.absolute())
+        shutil.copytree(AGENT_IMG_PATH, build_dir.resolve())
         (build_dir / 'src').mkdir(parents=True, exist_ok=True)
-        shutil.copy(Path(mhagenta.core.__file__).parent.absolute() / 'agent_launcher.py', (build_dir / 'src' / 'agent_launcher.py').absolute())
-        shutil.copy(Path(mhagenta.__file__).parent.absolute() / 'scripts' / 'start.sh', (build_dir / 'src' / 'start.sh').absolute())
+        shutil.copy(Path(mhagenta.core.__file__).parent.resolve() / 'agent_launcher.py', (build_dir / 'src' / 'agent_launcher.py').resolve())
+        shutil.copy(Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'start.sh', (build_dir / 'src' / 'start.sh').resolve())
+
+        agent.kwargs['directory'] = self._compose_directory()
 
         if agent.kwargs['exec_start_time'] is None:
             agent.kwargs['exec_start_time'] = self._start_time
+
         agent.kwargs['exec_start_time'] += self._agent_start_delay
 
         end_estimate = agent.kwargs['exec_start_time'] + agent.kwargs['start_delay'] + agent.kwargs['exec_duration']
         if self._simulation_end_ts < end_estimate:
             self._simulation_end_ts = end_estimate
 
-        with open((build_dir / 'src' / 'agent_params').absolute(), 'wb') as f:
+        with open((build_dir / 'src' / 'agent_params').resolve(), 'wb') as f:
             dill.dump(agent.kwargs, f, recurse=True)
 
         base_tag = self._base_image.tags[0].split(':')
-        agent.image, _ = self._docker_client.images.build(path=str(build_dir.absolute()),
+        agent.image, _ = self._docker_client.images.build(path=str(build_dir.resolve()),
                                                           buildargs={
                                                               'SRC_IMAGE': base_tag[0],
                                                               'SRC_VERSION': base_tag[1]
@@ -389,10 +547,10 @@ class Orchestrator:
         for i in range(agent.num_copies):
             if agent.num_copies == 1:
                 agent_name = agent.agent_id
-                agent_dir = (agent.dir / "out").absolute()
+                agent_dir = (agent.dir / "out").resolve()
             else:
                 agent_name = f'{agent.agent_id}_{i}'
-                agent_dir = (agent.dir / str(i) / "out").absolute()
+                agent_dir = (agent.dir / str(i) / "out").resolve()
 
             agent_dir.mkdir(parents=True, exist_ok=True)
             try:
@@ -404,54 +562,79 @@ class Orchestrator:
             except NotFound:
                 pass
 
-            agent.container = self._docker_client.containers.run(image=agent.image,
-                                                                 detach=True,
-                                                                 name=agent_name,
-                                                                 environment={"AGENT_ID": agent_name},
-                                                                 volumes={
-                                                                     str(agent_dir): {'bind': '/out', 'mode': 'rw'}
-                                                                 },
-                                                                 extra_hosts={'host.docker.internal': 'host-gateway'},
-                                                                 ports=agent.port_mapping)
+            agent.container = self._docker_client.containers.run(
+                image=agent.image,
+                detach=True,
+                name=agent_name,
+                environment={"AGENT_ID": agent_name},
+                volumes={
+                    str(agent_dir): {'bind': '/out', 'mode': 'rw'}
+                },
+                extra_hosts={'host.docker.internal': 'host-gateway'},
+                ports=agent.port_mapping
+            )
 
     async def arun(self,
-                   rabbitmq_image_name: str = 'mha-rabbitmq',
-                   mhagent_base_image_name: str = 'mha-base',
+                   mhagenta_version: str = '1.1.1',
                    force_run: bool = False,
-                   gui: bool = False
+                   gui: bool = False,
+                   rebuild_agents: bool = True,
+                   local_build: PathLike | None = None,
+                   prerelease: bool = False
                    ) -> None:
         """Run all the agents as an async method. Use in case you want to control the async task loop yourself.
 
         Args:
-            rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the base MHAgentA RabbitMQ image.
-            mhagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
+            mhagenta_version (str, optional): Version of mhagenta base container. Defaults to '1.1.1'.
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
             gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
                 orchestrator.
+            rebuild_agents (bool, optional, default=True): Whether to rebuild the agents. Defaults to True.
+            local_build (PathLike, optional): Specifies the path to a local build of MHAgentA (as opposed to the latest
+                one from PyPI) to be used for building agents.
+            prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
+                version of mhagenta while building the container.
 
         Raises:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
 
         """
+
+        self._start_time = time.time()
         if self._base_image is None:
-            self._docker_build_base(rabbitmq_image_name=rabbitmq_image_name,
-                                    mha_base_image_name=mhagent_base_image_name)
+            self._docker_build_base(mhagenta_version=mhagenta_version, local_build=local_build, prerelease=prerelease)
 
         self._force_run = force_run
         for agent in self._agents.values():
-            self._docker_build_agent(agent)
+            self._docker_build_agent(agent, rebuild_image=rebuild_agents)
 
         if gui:
             self._monitor = Monitor()
 
         self._running = True
-        self._start_time = time.time()
+
+        self.start_rabbitmq()
+
+        if self._environment is not None:
+            self._environment.environment['exec_duration'] -= (time.time() - self._start_time)
+            env_param_path = (self._environment.dir / 'params').resolve()
+            with open(env_param_path, 'wb') as f:
+                dill.dump(self._environment.environment, f, recurse=True)
+            self._environment.process = subprocess.Popen([
+                    f'{Path(sys.executable).resolve()}',
+                    f'{(Path(__file__).parent.parent / "environment" / "environment_launcher.py").resolve()}',
+                    str(env_param_path)
+                ],
+                stdout=None,
+            )
         async with asyncio.TaskGroup() as tg:
             self._task_group = tg
             if gui:
                 tg.create_task(self._monitor.run())
+            # if self._environment is not None:
+            #     tg.create_task(self._read_logs())
             for agent in self._agents.values():
                 tg.create_task(self._run_agent(agent, force_run=force_run))
                 tg.create_task(self._simulation_end_timer())
@@ -459,34 +642,54 @@ class Orchestrator:
         self._running = False
         for agent in self._agents.values():
             agent.container.remove()
+        if self._environment is not None:
+            print('Waiting for the environment process to stop gracefully...')
+            try:
+                self._environment.process.wait(20.)
+            except subprocess.TimeoutExpired:
+                print('Killing the environment process...')
+                self._environment.process.kill()
+        if self._mas_rmq_container is not None and self._mas_rmq_close_on_exit:
+            try:
+                self._mas_rmq_container.stop()
+            except Exception:
+                pass
         print('===== EXECUTION FINISHED =====')
 
     def run(self,
-            rabbitmq_image_name: str = 'mha-rabbitmq',
-            mhagent_base_image_name: str = 'mha-base',
+            mhagenta_version='1.1.1',
             force_run: bool = False,
-            gui: bool = False
+            gui: bool = False,
+            rebuild_agents: bool = True,
+            local_build: PathLike | None = None,
+            prerelease: bool = False
             ) -> None:
         """Run all the agents.
 
         Args:
-            rabbitmq_image_name (str, optional, default='mha-rabbitmq'): The name of the base MHAgentA RabbitMQ image.
-            mhagent_base_image_name (str, optional, default='mha-base'): The name of the base MHAgentA agent image.:
+            mhagenta_version (str, optional): Version of mhagenta base container. Defaults to '1.1.1'.
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
             gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
                 orchestrator.
+            rebuild_agents (bool, optional, default=True): Whether to rebuild the agents. Defaults to True.
+            local_build (PathLike, optional): Specifies the path to a local build of MHAgentA (as opposed to the latest
+                one from PyPI) to be used for building agents.
+            prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
+                version of mhagenta while building the container.
 
         Raises:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
 
         """
         asyncio.run(self.arun(
-            rabbitmq_image_name=rabbitmq_image_name,
-            mhagent_base_image_name=mhagent_base_image_name,
+            mhagenta_version=mhagenta_version,
             force_run=force_run,
-            gui=gui
+            gui=gui,
+            rebuild_agents=rebuild_agents,
+            local_build=local_build,
+            prerelease=prerelease
         ))
 
     @staticmethod
@@ -541,3 +744,28 @@ class Orchestrator:
 
     def __getitem__(self, agent_id: str) -> AgentEntry:
         return self._agents[agent_id]
+
+    def start_rabbitmq(self) -> None:
+        self._connect_rabbitmq()
+
+    def _connect_rabbitmq(self) -> None:
+        if self._mas_rmq_uri_internal is None:
+            return
+        try:
+            host, port = self._mas_rmq_uri.split(':') if ':' in self._mas_rmq_uri_internal else (self._mas_rmq_uri_internal, 5672)
+            connection = BlockingConnection(pika.ConnectionParameters(host, port))
+            connection.close()
+        except AMQPConnectionError:
+            self._mas_rmq_container = self._docker_client.containers.run(
+                image=DEFAULT_RMQ_IMAGE,
+                detach=True,
+                name='mhagenta-rmq',
+                ports={
+                    '5672': 5672,
+                    '15672':15672
+                },
+                remove=True,
+                tty=True
+            )
+
+

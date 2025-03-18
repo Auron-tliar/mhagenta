@@ -30,16 +30,17 @@ class LLOutbox(Outbox):
         """
         self._add(perceptor_id, ConnType.request, kwargs)
 
-    def send_beliefs(self, knowledge_id: str, beliefs: Iterable[Belief], **kwargs) -> None:
+    def send_beliefs(self, knowledge_id: str, observation: Observation, beliefs: Iterable[Belief], **kwargs) -> None:
         """Send belief update to a knowledge model module.
 
         Args:
             knowledge_id (str): `module_id` of the relevant knowledge model module.
+            observation (Observation): Observation from which the beliefs were extracted.
             beliefs (Iterable[Belief]): a collection of beliefs to be sent.
             **kwargs: additional keyword arguments to be included in the message.
 
         """
-        body = {'beliefs': beliefs}
+        body = {'observation': observation, 'beliefs': beliefs}
         if kwargs:
             body.update(kwargs)
         self._add(knowledge_id, ConnType.send, body)
@@ -67,20 +68,6 @@ class LLOutbox(Outbox):
         if kwargs:
             body.update(kwargs)
         self._add(goal_graph_id, ConnType.send, body)
-
-    def send_memories(self, memory_id: str, observations: Iterable[Any], **kwargs) -> None:
-        """Send new memories to a memory structure.
-
-        Args:
-            memory_id (str): `module_id` of the relevant memory structure.
-            observations (Iterable[Any]): collection of memories to send.
-            **kwargs: additional keyword arguments to be included in the message.
-
-        """
-        body = {'observations': observations}
-        if kwargs:
-            body.update(kwargs)
-        self._add(memory_id, ConnType.send, body)
 
     def request_model(self, learner_id: str, **kwargs) -> None:
         """Request the current model from a learner.
@@ -183,22 +170,6 @@ class LLReasonerBase(ModuleBase):
         """
         return state
 
-    def on_learning_status(self, state: LLState, sender: str, learning_status: Any, **kwargs) -> LLState:
-        """Override to define low-level reasoner's reaction to receiving a learning status.
-
-        Args:
-            state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
-                functionality.
-            sender (str): `module_id` of the learner that sent the learning status.
-            learning_status (Any): received learning status object.
-            **kwargs: additional keyword arguments included in the message.
-
-        Returns:
-            LLState: modified or unaltered internal state of the module.
-
-        """
-        return state
-
 
 class LLReasoner(MHAModule):
     def __init__(self,
@@ -212,28 +183,26 @@ class LLReasoner(MHAModule):
         out_id_channels = list()
         in_id_channels_callbacks = list()
 
-        for perceptor in self._directory.perception:
-            out_id_channels.append(self.sender_reg_entry(perceptor, ConnType.request))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(perceptor, ConnType.send, self._receive_observation))
+        for perceptor in self._directory.internal.perception:
+            out_id_channels.append(self.sender_reg_entry(perceptor.module_id, ConnType.request))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(perceptor.module_id, ConnType.send, self._receive_observation))
 
-        for actuator in self._directory.actuation:
-            out_id_channels.append(self.sender_reg_entry(actuator, ConnType.request))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(actuator, ConnType.send, self._receive_action_status))
+        for actuator in self._directory.internal.actuation:
+            out_id_channels.append(self.sender_reg_entry(actuator.module_id, ConnType.request))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(actuator.module_id, ConnType.send, self._receive_action_status))
 
-        if self._directory.hl_reasoning:
-            for knowledge in self._directory.knowledge:
-                out_id_channels.append(self.sender_reg_entry(knowledge, ConnType.send))
-            for goal_graph in self._directory.goals:
-                out_id_channels.append(self.sender_reg_entry(goal_graph, ConnType.request))
-                out_id_channels.append(self.sender_reg_entry(goal_graph, ConnType.send))
-                in_id_channels_callbacks.append(self.recipient_reg_entry(goal_graph, ConnType.send, self._receive_goals))
-        for memory in self._directory.memory:
-            out_id_channels.append(self.sender_reg_entry(memory, ConnType.send))
-        for learner in self._directory.learning:
-            out_id_channels.append(self.sender_reg_entry(learner, ConnType.request))
-            out_id_channels.append(self.sender_reg_entry(learner, ConnType.send))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(learner, ConnType.send, self._receive_learning_status, 'status'))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(learner, ConnType.send, self._receive_learner_model, 'model'))
+        if self._directory.internal.hl_reasoning:
+            for knowledge in self._directory.internal.knowledge:
+                out_id_channels.append(self.sender_reg_entry(knowledge.module_id, ConnType.send))
+            for goal_graph in self._directory.internal.goals:
+                out_id_channels.append(self.sender_reg_entry(goal_graph.module_id, ConnType.request))
+                out_id_channels.append(self.sender_reg_entry(goal_graph.module_id, ConnType.send))
+                in_id_channels_callbacks.append(self.recipient_reg_entry(goal_graph.module_id, ConnType.send, self._receive_goals))
+
+        for learner in self._directory.internal.learning:
+            out_id_channels.append(self.sender_reg_entry(learner.module_id, ConnType.request))
+            out_id_channels.append(self.sender_reg_entry(learner.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(learner.module_id, ConnType.send, self._receive_learner_model))
 
         super().__init__(
             global_params=global_params,
@@ -262,13 +231,6 @@ class LLReasoner(MHAModule):
         goals = msg.body.pop('goals')
         update = self._base.on_goal_update(state=self._state, sender=sender, goals=goals, **msg.body)
         self.log(5, f'Finished processing goal update {msg.id}!')
-        return update
-
-    def _receive_learning_status(self, sender: str, channel: str, msg: Message) -> LLState:
-        self.debug(f'Received learning status {msg.id} from {sender}. Processing...')
-        learning_status = msg.body.pop('learning_status')
-        update = self._base.on_learning_status(state=self._state, sender=sender, learning_status=learning_status, **msg.body)
-        self.log(5, f'Finished processing learning status {msg.id}!')
         return update
 
     def _receive_learner_model(self, sender: str, channel: str, msg: Message) -> LLState:

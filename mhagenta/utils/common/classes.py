@@ -1,8 +1,10 @@
 import logging
 import sys
+import os
 import time
 import uuid
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, ClassVar, Callable, Self, Iterable, Optional
 from uuid import uuid4
 import dataclasses
@@ -11,6 +13,19 @@ from pydantic.dataclasses import dataclass
 
 from mhagenta.utils.common.logging import ILogging
 from mhagenta.utils.common.logging import DEFAULT_FORMAT as DEFAULT_LOG_FORMAT
+
+
+class ModuleTypes:
+    AGENT = 'Agent'
+    ALL = 'All'
+    PERCEPTOR = 'Perceptor'
+    ACTUATOR = 'Actuator'
+    LLREASONER = 'LLReasoner'
+    LEARNER = 'Learner'
+    KNOWLEDGE = 'Knowledge'
+    HLREASONER = 'HLReasoner'
+    GOALGRAPH = 'GoalGraph'
+    MEMORY = 'Memory'
 
 
 class MHABase(ILogging, ABC):
@@ -23,7 +38,7 @@ class MHABase(ILogging, ABC):
                  ) -> None:
         self._agent_id = agent_id
         self._log_id = self.__class__.__name__ if log_id is None else log_id
-        self._log_tags = log_tags[:] if log_tags else [agent_id]
+        self._log_tags = log_tags[:] if log_tags is not None else [agent_id]
         self._log_tags.append(self._log_id)
         self._log_level = log_level
         self._log_format = log_format
@@ -155,120 +170,236 @@ class AgentTime:
         return self.system, self.agent, self.module, self.exec
 
 
-class Directory:
-    """Directory of all module names and types for easier communication definition.
+class TagCard[T](ABC):
+    def __init__(self, tags: Iterable[T]) -> None:
+        self.tags: set[T] = set(tags)
+
+    def match(self, query: Iterable[T]) -> bool:
+        for tag in query:
+            if tag not in self.tags:
+                return False
+        return True
+
+    @property
+    @abstractmethod
+    def id(self) -> str:
+        pass
+
+    def __eq__(self, other: str) -> bool:
+        return self.id == other
+
+
+
+class ICard(TagCard[str]):
+    def __init__(self, module_id: str, module_type: str, tags: Iterable[str] | None = None) -> None:
+        self.module_id = module_id
+        self.module_type = module_type
+        super().__init__(tags if tags is not None else tuple())
+
+    @property
+    def id(self) -> str:
+        return self.module_id
+
+
+class ECard(TagCard[str]):
+    def __init__(self, agent_id: str, address: dict[str, Any], tags: Iterable[str] | None = None) -> None:
+        self.agent_id = agent_id
+        self.address = address
+        super().__init__(tags if tags is not None else tuple())
+
+    @property
+    def id(self) -> str:
+        return self.agent_id
+
+
+class BaseDirectory:
+    def __init__(self, content: Iterable[TagCard[str]] | None = None) -> None:
+        self._content = list(content) if content is not None else list()
+        self._by_id = {card.id: card for card in content} if content is not None else dict()
+
+    def __getitem__(self, item: str | int) -> TagCard[str]:
+        if isinstance(item, int):
+            return self._content[item]
+        else:
+            return self._by_id[item]
+
+    def __contains__(self, item: str) -> bool:
+        return item in self._by_id
+
+    def search(self, tags: Iterable[str]) -> list[TagCard[str]]:
+        output = list()
+        for card in self._content:
+            if card.match(tags):
+                output.append(card)
+        return output
+
+    def _add(self, card: TagCard[str]) -> None:
+        self._content.append(card)
+        self._by_id[card.id] = card
+
+
+class IDirectory(BaseDirectory):
+    """Directory of all module names, types, and tags for easier communication definition.
 
     Created by the agent's root controller.
 
     """
+    def __init__(self) -> None:
+        super().__init__()
+        self._by_type: dict[str, list[ICard]] = {
+            ModuleTypes.PERCEPTOR: list(),
+            ModuleTypes.ACTUATOR: list(),
+            ModuleTypes.LLREASONER: list(),
+            ModuleTypes.LEARNER: list(),
+            ModuleTypes.KNOWLEDGE: list(),
+            ModuleTypes.HLREASONER: list(),
+            ModuleTypes.GOALGRAPH: list(),
+            ModuleTypes.MEMORY: list()
+        }
+
+    @property
+    def perception(self) -> list[ICard]:
+        """(Property) List of Perceptor info cards.
+
+        Returns:
+            list[ICard]: List of `module_id`s of all the agent `Perceptor`s
+
+        """
+        return self._by_type[ModuleTypes.PERCEPTOR]
+
+    @property
+    def actuation(self) -> list[ICard]:
+        """(Property) List of Actuator info cards.
+
+        Returns:
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Actuator`s
+
+        """
+        return self._by_type[ModuleTypes.ACTUATOR]
+
+    @property
+    def ll_reasoning(self) -> list[ICard]:
+        """(Property) List of Low-level reasoner info cards.
+
+        Returns:
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `LLReasoner`s
+
+        """
+        return self._by_type[ModuleTypes.LLREASONER]
+
+    @property
+    def learning(self) -> list[ICard]:
+        """(Property) List of Learner info cards.
+
+        Returns:
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Learner`s
+
+        """
+        return self._by_type[ModuleTypes.LEARNER]
+
+    @property
+    def knowledge(self) -> list[ICard]:
+        """(Property) List of Knowledge model info cards.
+
+        Returns:
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Knowledge`s
+
+        """
+        return self._by_type[ModuleTypes.KNOWLEDGE]
+
+    @property
+    def hl_reasoning(self) -> list[ICard]:
+        """(Property) List of High-level reasoner info cards.
+
+        Returns:
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `HLReasoner`s
+
+        """
+        return self._by_type[ModuleTypes.HLREASONER]
+
+    @property
+    def goals(self) -> list[ICard]:
+        """(Property) List of Goal graph info cards.
+
+        Returns:
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `goal_graph`s
+
+        """
+        return self._by_type[ModuleTypes.GOALGRAPH]
+
+    @property
+    def memory(self) -> list[ICard]:
+        """(Property) List of Memory structure info cards.
+
+        Returns:
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Memory`s
+
+        """
+        return self._by_type[ModuleTypes.MEMORY]
+
+    def _add_module(self, module_id: str, module_type: str, tags: Iterable[str] | None = None) -> ICard:
+        card = ICard(module_id, module_type, tags)
+        self._add(card)
+        self._by_type[module_type].append(card)
+        return card
+
+    def __getitem__(self, item: str | int) -> ICard:
+        return super().__getitem__(item)
+
+    def search(self, tags: Iterable[str]) -> list[ICard]:
+        return super().search(tags)
+
+
+class EDirectory(BaseDirectory):
+    ENVIRONMENT = 'environment'
+    localhost_win = 'host.docker.internal'
+    localhost_linux = 'http://172.17.0.1'
+
+
     def __init__(self,
-                 perception: Iterable[str] | str,
-                 actuation: Iterable[str] | str,
-                 ll_reasoning: Iterable[str] | str,
-                 learning: Iterable[str] | str | None = None,
-                 knowledge: Iterable[str] | str | None = None,
-                 hl_reasoning: Iterable[str] | str | None = None,
-                 goals: Iterable[str] | str | None = None,
-                 memory: Iterable[str] | str | None = None
+                 env_address: dict[str, Any] | None = None,
+                 env_tags: Iterable[str] | None = None
                  ) -> None:
-        self._perception = self._process_modules(perception)
-        self._actuation = self._process_modules(actuation)
-        self._ll_reasoning = self._process_modules(ll_reasoning)
-        self._learning = self._process_modules(learning)
-        self._knowledge = self._process_modules(knowledge)
-        self._hl_reasoning = self._process_modules(hl_reasoning)
-        self._goals = self._process_modules(goals)
-        self._memory = self._process_modules(memory)
+        if env_address is None:
+            super().__init__()
+            return
+
+        tags = [self.ENVIRONMENT]
+        if env_tags is not None:
+            tags.extend(env_tags)
+        env_card = ECard(self.ENVIRONMENT, env_address, tags)
+        super().__init__([env_card])
+
+    def add_agent(self, agent_id: str, address: Any, tags: Iterable[str] | None = None) -> ECard:
+        card = ECard(agent_id, address, tags)
+        self._add(card)
+        return card
+
+    def __getitem__(self, item: str | int) -> ECard:
+        return super().__getitem__(item)
+
+    def search(self, tags: Iterable[str]) -> list[ECard]:
+        return super().search(tags)
 
     @property
-    def perception(self) -> list[str]:
-        """(Property) List of Perceptor IDs.
+    def environment(self) -> ECard | None:
+        return self[self.ENVIRONMENT] if self.ENVIRONMENT in self._by_id else None
 
-        Returns:
-            list[str]: List of `module_id`s of all the agent `Perceptor`s
 
-        """
-        return self._perception
-
-    @property
-    def actuation(self) -> list[str]:
-        """(Property) List of Actuator IDs.
-
-        Returns:
-            list[str]: List of `module_id`s of all the agent `Actuator`s
-
-        """
-        return self._actuation
+class Directory:
+    def __init__(self,
+                 env_address: Any | None = None,
+                 env_tags: Iterable[str] | None = None):
+        self._internal = IDirectory()
+        self._external = EDirectory(env_address=env_address, env_tags=env_tags)
 
     @property
-    def ll_reasoning(self) -> list[str]:
-        """(Property) List of Low-level reasoner IDs.
-
-        Returns:
-            list[str]: List of `module_id`s of all the agent `LLReasoner`s
-
-        """
-        return self._ll_reasoning
+    def internal(self) -> IDirectory:
+        return self._internal
 
     @property
-    def learning(self) -> list[str]:
-        """(Property) List of Learner IDs.
-
-        Returns:
-            list[str]: List of `module_id`s of all the agent `Learner`s
-
-        """
-        return self._learning
-
-    @property
-    def knowledge(self) -> list[str]:
-        """(Property) List of Knowledge model IDs.
-
-        Returns:
-            list[str]: List of `module_id`s of all the agent `Knowledge`s
-
-        """
-        return self._knowledge
-
-    @property
-    def hl_reasoning(self) -> list[str]:
-        """(Property) List of High-level reasoner IDs.
-
-        Returns:
-            list[str]: List of `module_id`s of all the agent `HLReasoner`s
-
-        """
-        return self._hl_reasoning
-
-    @property
-    def goals(self) -> list[str]:
-        """(Property) List of Goal graph IDs.
-
-        Returns:
-            list[str]: List of `module_id`s of all the agent `goal_graph`s
-
-        """
-        return self._goals
-
-    @property
-    def memory(self) -> list[str]:
-        """(Property) List of Memory structure IDs.
-
-        Returns:
-            list[str]: List of `module_id`s of all the agent `Memory`s
-
-        """
-        return self._memory
-
-    @staticmethod
-    def _process_modules(module_ids: Iterable[str] | str | None) -> list[str]:
-        if isinstance(module_ids, Iterable):
-            modules = list(module_ids)
-        elif isinstance(module_ids, str):
-            modules = [module_ids]
-        else:
-            modules = []
-        return modules
+    def external(self) -> EDirectory:
+        return self._external
 
 
 @dataclass
@@ -292,7 +423,7 @@ class Goal:
 
     Attributes:
         state (list[Belief]): Belief-based description of the goal state.
-        misc (dict[str, Any]): keyword dictionary of additional relevant information.
+        extras (dict[str, Any]): keyword dictionary of additional relevant information.
 
     """
     state: list[Belief]
@@ -308,14 +439,15 @@ class Observation:
 
     Attributes:
         observation_type (str): type of the observation.
-        value (Any): observed object.
+        content (Any): observed object.
 
     """
-    value: Any
+    content: Any
     observation_type: Optional[str] = 'Any'
+    value: float | None = None
 
     def __str__(self) -> str:
-        return f'[{self.observation_type}] {self.value}'
+        return f'[{self.observation_type}] {self.content}'
 
 
 @dataclass
@@ -374,6 +506,25 @@ class StatusReport:
 
 
 @dataclass
+class Performatives:
+    INFORM: ClassVar[str] = 'inform'
+
+    AGREE: ClassVar[str] = 'agree'
+    CANCEL: ClassVar[str] = 'cancel'
+    CFP: ClassVar[str] = 'cfp'
+    CONFIRM: ClassVar[str] = 'confirm'
+    NOT_UNDERSTOOD: ClassVar[str] = 'not-understood'
+    PROPOSE: ClassVar[str] = 'propose'
+    QUERY: ClassVar[str] = 'query'
+    REFUSE: ClassVar[str] = 'refuse'
+    REJECT_PROPOSAL: ClassVar[str] = 'reject-proposal'
+    REQUEST: ClassVar[str] = 'request'
+
+    OBSERVE: ClassVar[str] = 'observe'
+    ACT: ClassVar[str] = 'act'
+
+
+@dataclass
 class Message:
 
     body: Any | dict[str, Any]
@@ -381,7 +532,7 @@ class Message:
     recipient_id: str
     ts: float | str
     performative: str
-    uuid: bytes = dataclasses.field(default_factory=lambda: uuid.uuid4())
+    uuid: bytes = dataclasses.field(default_factory=lambda: uuid.uuid4().bytes)
     short_uuid_format: bool = True
 
     def __init__(self,
@@ -414,7 +565,7 @@ class Message:
 
     @property
     def short_id(self) -> str:
-        return self.uuid.bytes[-6:].hex()
+        return self.uuid[-6:].hex()
 
 
 class Outbox(ABC):
@@ -426,7 +577,7 @@ class Outbox(ABC):
         self._next_content = -1
 
     def _add(self, recipient_id: str, performative: str, content: Any | dict[str, Any], extension: str = '') -> None:
-        if (recipient_id, performative) in self._msgs:
+        if (recipient_id, performative, extension) in self._msgs:
             self._msgs[recipient_id, performative, extension].append(content)
         else:
             self._msgs[recipient_id, performative, extension] = [content]
@@ -555,16 +706,3 @@ class State[T: Outbox]:
 
     def __repr__(self) -> str:
         return str(self.dump())
-
-
-class ModuleTypes:
-    AGENT = 'Agent'
-    ALL = 'All'
-    PERCEPTOR = 'Perceptor'
-    ACTUATOR = 'Actuator'
-    LLREASONER = 'LLReasoner'
-    LEARNER = 'Learner'
-    KNOWLEDGE = 'Knowledge'
-    HLREASONER = 'HLReasoner'
-    GOALGRAPH = 'GoalGraph'
-    MEMORY = 'Memory'

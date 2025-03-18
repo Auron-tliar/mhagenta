@@ -43,7 +43,7 @@ class GoalGraphBase(ModuleBase):
         Args:
             state (GoalGraphState): Goal graph's internal state enriched with relevant runtime information and
                 functionality.
-            sender (str): `module_id` of the module (high-level or low-level reasoner) that sent the request.
+            sender (str): `module_id` of the low-level reasoner that sent the request.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -66,6 +66,12 @@ class GoalGraphBase(ModuleBase):
             GoalGraphState: modified or unaltered internal state of the module.
 
         """
+        if sender in state.directory.internal.ll_reasoning:
+            for hl_reasoner in state.directory.internal.hl_reasoning:
+                state.outbox.send_goals(receiver_id=hl_reasoner.module_id, goals=goals, **kwargs)
+        elif sender in state.directory.internal.hl_reasoning:
+            for ll_reasoner in state.directory.internal.ll_reasoning:
+                state.outbox.send_goals(receiver_id=ll_reasoner.module_id, goals=goals, **kwargs)
         return state
 
 
@@ -81,14 +87,14 @@ class GoalGraph(MHAModule):
         out_id_channels = list()
         in_id_channels_callbacks = list()
 
-        for ll_reasoner in self._directory.ll_reasoning:
-            out_id_channels.append(self.sender_reg_entry(ll_reasoner, ConnType.send))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner, ConnType.request, self._receive_request))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner, ConnType.send, self._receive_update))
+        for ll_reasoner in self._directory.internal.ll_reasoning:
+            out_id_channels.append(self.sender_reg_entry(ll_reasoner.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner.module_id, ConnType.request, self._receive_request))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner.module_id, ConnType.send, self._receive_update))
 
-        for hl_reasoner in self._directory.hl_reasoning:
-            out_id_channels.append(self.sender_reg_entry(hl_reasoner, ConnType.send))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner, ConnType.send, self._receive_update))
+        for hl_reasoner in self._directory.internal.hl_reasoning:
+            out_id_channels.append(self.sender_reg_entry(hl_reasoner.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(hl_reasoner.module_id, ConnType.send, self._receive_update))
 
         super().__init__(
             global_params=global_params,

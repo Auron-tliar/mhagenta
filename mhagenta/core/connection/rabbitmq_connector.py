@@ -287,14 +287,15 @@ class RabbitMQConnector(Connector):
     def __init__(self,
                  agent_id: str,
                  sender_id: str,
-                 agent_time: AgentTime,
+                 agent_time: AgentTime | None,
                  host: str = 'localhost',
                  port: int = 5672,
                  prefetch_count: int = 1,
                  is_master: bool = False,
                  log_tags: list[str] = '',
                  log_level: int | str = logging.DEBUG,
-                 log_format: str = DEFAULT_LOG_FORMAT
+                 log_format: str = DEFAULT_LOG_FORMAT,
+                 external_exchange_name: str | None = None,
                  ) -> None:
         super().__init__(
             agent_id=agent_id,
@@ -305,9 +306,11 @@ class RabbitMQConnector(Connector):
             log_format=log_format
         )
 
-        self._main_exchange = f'{agent_id}.main'
-        self._cmd_exchange = f'{agent_id}.cmd'
-        self._status_exchange = f'{agent_id}.status'
+        self._main_exchange = f'{agent_id}.main' if external_exchange_name is None else None
+        self._cmd_exchange = f'{agent_id}.cmd' if external_exchange_name is None else None
+        self._status_exchange = f'{agent_id}.status' if external_exchange_name is None else None
+
+        self._external_exchange = external_exchange_name if external_exchange_name is not None else None
 
         self._reconnect_delay = 0
 
@@ -323,6 +326,9 @@ class RabbitMQConnector(Connector):
 
         self._initialized = False
         self._started = False
+
+    def set_time(self, time: AgentTime) -> None:
+        self._time = time
 
     async def initialize(self) -> None:
         self.connection = self._connect()
@@ -355,10 +361,10 @@ class RabbitMQConnector(Connector):
         consumer = RabbitMQAsyncioConsumer(
             agent_id=self._agent_id,
             channel=self.channel,
-            exchange_name=self._main_exchange,
+            exchange_name=self._main_exchange if self._main_exchange is not None else self._external_exchange,
             exchange_type=ExchangeType.direct,
             routing_keys=channel,
-            msg_callback=self._to_pika_msg_callback(sender, channel, callback),
+            msg_callback=self._to_pika_msg_callback(sender, channel, callback) if self._main_exchange is not None else self._to_pika_ext_msg_callback(callback),
             agent_time=self._time,
             prefetch_count=self._prefetch_count,
             log_tags=self._log_tags,
@@ -373,7 +379,7 @@ class RabbitMQConnector(Connector):
             agent_id=self._agent_id,
             sender_id=self._sender_id,
             channel=self.channel,
-            exchange_name=self._main_exchange,
+            exchange_name=self._main_exchange if self._main_exchange is not None else self._external_exchange,
             exchange_type=ExchangeType.direct,
             agent_time=self._time,
             routing_key=channel,
@@ -382,7 +388,7 @@ class RabbitMQConnector(Connector):
             log_format=self._log_format
         )
         await publisher.start()
-        self._publishers[(self._main_exchange, channel)] = publisher
+        self._publishers[(self._main_exchange, channel if self._main_exchange is not None else '')] = publisher
 
     async def subscribe_to_cmds(self, callback: Callable[[AgentCmd], None], **kwargs) -> None:
         # self.debug('Subscribing to cmds...')
@@ -455,11 +461,18 @@ class RabbitMQConnector(Connector):
         self._publishers[(self._status_exchange, 'root')] = publisher
 
     def send(self, recipient: str, channel: str, msg: Message, **kwargs) -> None:
-        self._publish_message(
-            exchange_name=self._main_exchange,
-            routing_key=channel,
-            message=self.encode_msg(msg)
-        )
+        if self._main_exchange is not None:
+            self._publish_message(
+                exchange_name=self._main_exchange,
+                routing_key=channel,
+                message=self.encode_msg(msg)
+            )
+        else:
+            self._publish_message(
+                exchange_name=self._external_exchange,
+                routing_key=recipient,
+                message=self.encode_msg(msg)
+            )
 
     def cmd(self, cmd: AgentCmd, module_types: str | Iterable[str] = ModuleTypes.ALL,
             module_ids: str | Iterable[str] = ModuleTypes.ALL, **kwargs) -> None:
@@ -543,6 +556,13 @@ class RabbitMQConnector(Connector):
             callback(sender, channel, message)
         return pika_callback
 
+    def _to_pika_ext_msg_callback(self, callback: MsgProcessorCallback) ->\
+            Callable[[pika.channel.Channel, Basic.Deliver, BasicProperties, bytes], None]:
+        def pika_callback(pika_channel: pika.channel.Channel, method: Basic.Deliver, properties: BasicProperties, body: bytes) -> None:
+            message = self.decode_msg(body)
+            callback(message.sender_id, '', message)
+        return pika_callback
+
     @staticmethod
     def _to_pika_cmd_callback(callback: Callable[[AgentCmd], None]) ->\
             Callable[[pika.channel.Channel, Basic.Deliver, BasicProperties, bytes], None]:
@@ -564,13 +584,6 @@ class RabbitMQConnector(Connector):
                          routing_key: str | None,
                          message: dict | str | bytes) -> None:
         publisher_key = (exchange_name, None) if (exchange_name, None) in self._publishers else (exchange_name, routing_key)
+        if self._external_exchange:
+            publisher_key = (None, '')
         self._publishers[publisher_key].publish_message(message, routing_key)
-
-    # @property
-    # def _logger_extras(self) -> LoggerExtras | None:
-    #     return LoggerExtras(
-    #         agent_time=self._time.agent,
-    #         mod_time=self._time.module,
-    #         exec_time=str(self._time.exec) if self._time.exec is not None else '-',
-    #         tags=self.log_tag_str
-    #     )

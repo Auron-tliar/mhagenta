@@ -65,9 +65,9 @@ class Perceptor(MHAModule):
         out_id_channels = list()
         in_id_channels_callbacks = list()
 
-        for ll_reasoner in self._directory.ll_reasoning:
-            out_id_channels.append(self.sender_reg_entry(ll_reasoner, ConnType.send))
-            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner, ConnType.request, self.receive_request))
+        for ll_reasoner in self._directory.internal.ll_reasoning:
+            out_id_channels.append(self.sender_reg_entry(ll_reasoner.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(ll_reasoner.module_id, ConnType.request, self.receive_request))
 
         super().__init__(
             global_params=global_params,

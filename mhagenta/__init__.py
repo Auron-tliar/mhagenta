@@ -1,8 +1,8 @@
 import importlib.metadata
 
-from mhagenta.core import Orchestrator
 from mhagenta.utils import State, Directory, Observation, Goal, Belief, ActionStatus
 from mhagenta import bases, outboxes
+from mhagenta.core.orchestrator import Orchestrator
 
 
 __version__ = importlib.metadata.version("mhagenta")

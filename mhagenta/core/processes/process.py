@@ -150,27 +150,6 @@ class ExecQueue:
         return ((self._priority_queue and self._priority_queue[0][0] < self._agent_time) or
                 (self._queue and self._queue[0][0] < self._agent_time))
 
-    # def pop(self, priority: bool = False, stop: bool = False) -> Task | None:
-    #     if self._priority_queue and self._priority_queue[0][0] < self._agent_time:
-    #         task: Task = heapq.heappop(self._priority_queue)[1]
-    #     elif not priority and self._queue and self._queue[0][0] < self._agent_time:
-    #         task: Task = heapq.heappop(self._queue)[1]
-    #     else:
-    #         return None
-    #
-    #     if task.periodic and not stop and not task.stop_check:
-    #         if task.priority:
-    #             heapq.heappush(self._priority_queue, self._periodic_add_task(task).queue_item)
-    #         else:
-    #             heapq.heappush(self._queue, self._periodic_add_task(task).queue_item)
-    #         # next_task = task.copy(task.ts + task.frequency)
-    #         # if task.priority:
-    #         #     heapq.heappush(self._priority_queue, next_task.queue_item)
-    #         # else:
-    #         #     heapq.heappush(self._queue, next_task.queue_item)
-    #
-    #     return task
-
     def run_next(self, priority: bool = False, stop: bool = False) -> None:
         if self._priority_queue and self._priority_queue[0][0] < self._agent_time:
             task: Task = heapq.heappop(self._priority_queue)[1]
