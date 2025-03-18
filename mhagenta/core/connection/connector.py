@@ -14,7 +14,7 @@ class Connector(MHABase, ABC):
                  agent_id: str,
                  sender_id: str,
                  agent_time: AgentTime,
-                 log_tags: list[str] = '',
+                 log_tags: list[str] | None = None,
                  log_level: int | str = logging.DEBUG,
                  log_format: str = DEFAULT_LOG_FORMAT,
                  *args, **kwargs

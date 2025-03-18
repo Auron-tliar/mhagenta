@@ -60,12 +60,12 @@ class ModuleBase:
         self.initial_state = initial_state
         self.init_kwargs = init_kwargs if init_kwargs is not None else dict()
         self.tags = tags if tags is not None else list()
-        self._agent_id: str = None
+        self._agent_id: str | None = None
         self._is_reactive = self._check_reactive()
-        self._state_getter: Callable[[], State] = None
-        self._state_setter: Callable[[State], None] = None
-        self._log_func: Callable[[int, str], None] = None
-        self._owner: MHAModule = None
+        self._state_getter: Callable[[], State] | None = None
+        self._state_setter: Callable[[State], None] | None = None
+        self._log_func: Callable[[int, str], None] | None = None
+        self._owner: MHAModule | None = None
 
         self.extras: dict[str, Any] = dict()
 
@@ -85,6 +85,9 @@ class ModuleBase:
         pass
 
     async def _internal_start(self) -> None:
+        pass
+
+    async def _internal_stop(self) -> None:
         pass
 
     def on_init(self, **kwargs) -> None:
@@ -280,6 +283,8 @@ class MHAModule(MHAProcess):
     async def on_stop(self) -> None:
         self.info('Stopping')
         self._on_last_step()
+        await self._base._internal_stop()
+
         self.save_state()
         self._queue.clear()
         self._report_status()
@@ -290,14 +295,14 @@ class MHAModule(MHAProcess):
             return
         match cmd.cmd:
             case cmd.START:
-                self.info(f'Received {cmd.START} command (start ts: {cmd.args["start_ts"] if "start_ts" in cmd.args else "-"})')
-                self._time.set_exec_start_ts(self._time.agent_start_ts +
-                                             cmd.args['start_ts'] if 'start_ts' in cmd.args else self._time.agent)
-                self._stop_time = cmd.args['start_ts'] + self._exec_duration
+                self.info(f'Received {cmd.START} command (start ts: {cmd.args["start_ts"] if "start_ts" in cmd.args else "-"}, {(cmd.args["start_ts"] - self._time.system) if "start_ts" in cmd.args else "-"} seconds from now)')
+                start_ts = cmd.args['start_ts'] if 'start_ts' in cmd.args else self._time.agent + self._time.system
+                self._time.set_exec_start_ts(start_ts)  # self._time.agent_start_ts +
+                self._stop_time = start_ts - self._time.system + self._time.agent + self._exec_duration
                 # self._stage = self.Stage.starting
                 self._queue.push(
                     func=self._run,
-                    ts=self._time.exec_start_ts - self._time.agent_start_ts,
+                    ts=self._time.exec_start_ts - self._time.system + self._time.agent, # - self._time.agent_start_ts,
                     priority=True,
                     periodic=False
                 )

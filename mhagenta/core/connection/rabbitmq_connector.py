@@ -287,7 +287,7 @@ class RabbitMQConnector(Connector):
     def __init__(self,
                  agent_id: str,
                  sender_id: str,
-                 agent_time: AgentTime,
+                 agent_time: AgentTime | None,
                  host: str = 'localhost',
                  port: int = 5672,
                  prefetch_count: int = 1,
@@ -326,6 +326,9 @@ class RabbitMQConnector(Connector):
 
         self._initialized = False
         self._started = False
+
+    def set_time(self, time: AgentTime) -> None:
+        self._time = time
 
     async def initialize(self) -> None:
         self.connection = self._connect()

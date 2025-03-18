@@ -1,5 +1,5 @@
-ARG SRC_IMAGE="mha-rabbitmq"
-ARG SRC_TAG="latest"
+ARG SRC_IMAGE="aurontliar/mhagenta"
+ARG SRC_TAG="rmq"
 FROM ${SRC_IMAGE}:${SRC_TAG}
 LABEL authors="Dmitry Gnatyshak"
 ARG PRE_VERSION="false"

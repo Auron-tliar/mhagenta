@@ -38,7 +38,7 @@ class MHABase(ILogging, ABC):
                  ) -> None:
         self._agent_id = agent_id
         self._log_id = self.__class__.__name__ if log_id is None else log_id
-        self._log_tags = log_tags[:] if log_tags else [agent_id]
+        self._log_tags = log_tags[:] if log_tags is not None else [agent_id]
         self._log_tags.append(self._log_id)
         self._log_level = log_level
         self._log_format = log_format
@@ -352,7 +352,7 @@ class IDirectory(BaseDirectory):
 
 class EDirectory(BaseDirectory):
     ENVIRONMENT = 'environment'
-    localhost_win = 'http://host.docker.internal'
+    localhost_win = 'host.docker.internal'
     localhost_linux = 'http://172.17.0.1'
 
 
@@ -577,7 +577,7 @@ class Outbox(ABC):
         self._next_content = -1
 
     def _add(self, recipient_id: str, performative: str, content: Any | dict[str, Any], extension: str = '') -> None:
-        if (recipient_id, performative) in self._msgs:
+        if (recipient_id, performative, extension) in self._msgs:
             self._msgs[recipient_id, performative, extension].append(content)
         else:
             self._msgs[recipient_id, performative, extension] = [content]

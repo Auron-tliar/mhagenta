@@ -1,65 +1,25 @@
+import asyncio
 import logging
-from typing import Iterable, Any
+from os import PathLike
+from types import FrameType
+from typing import Iterable, Any, Literal
 import time
 from abc import ABC, abstractmethod
+from pathlib import Path
+import json
+import dill
+import signal
 
 from mhagenta.utils import LoggerExtras
 from mhagenta.utils.common import MHABase, DEFAULT_LOG_FORMAT, AgentTime, Message, Performatives
 
 
-class MHAEnvironment(MHABase, ABC):
+class MHAEnvBase:
     """
-    Base class for MHAgentA environments
+    Behaviour base-class for MHAEnvironment
     """
-
-    def __init__(self,
-                 state: dict[str, Any] | None = None,
-                 env_id: str = "environment",
-                 exec_duration: float = 60.,
-                 start_time_reference: float | None = None,
-                 log_id: str | None = None,
-                 log_tags: list[str] | None = None,
-                 log_level: int | str = logging.DEBUG,
-                 log_format: str = DEFAULT_LOG_FORMAT,
-                 tags: Iterable[str] | None = None
-                 ) -> None:
-        super().__init__(
-            agent_id=env_id,
-            log_id=log_id,
-            log_tags=log_tags,
-            log_level=log_level,
-            log_format=log_format
-        )
-
-        self.id = env_id
-        self.tags = list(tags)
-        if start_time_reference is None:
-            start_time_reference = time.time()
-        self.time = AgentTime(
-            agent_start_ts=start_time_reference if start_time_reference is not None else time.time(),
-            exec_start_ts=start_time_reference if start_time_reference is not None else time.time()
-        )
-        self._exec_duration = exec_duration
-
-        self.state = state if state is not None else {}
-
-    def set_start_time(self, start_time_reference: float | None) -> None:
-        self.time = AgentTime(
-            agent_start_ts=start_time_reference,
-            exec_start_ts=start_time_reference
-        )
-
-    @abstractmethod
-    async def initialize(self) -> None:
-        pass
-
-    @abstractmethod
-    async def start(self) -> None:
-        pass
-
-    @abstractmethod
-    def stop(self) -> None:
-        pass
+    def __init__(self, init_state: dict[str, Any] | None) -> None:
+        self.state = init_state if init_state is not None else {}
 
     def on_observe(self, state: dict[str, Any], sender_id: str, **kwargs) -> tuple[dict[str, Any], dict[str, Any]]:
         """
@@ -93,6 +53,90 @@ class MHAEnvironment(MHABase, ABC):
         """
         return state
 
+
+class MHAEnvironment(MHABase, ABC):
+    """
+    Base class for MHAgentA environments
+    """
+
+    def __init__(self,
+                 base: MHAEnvBase,
+                 env_id: str = "environment",
+                 exec_duration: float = 60.,
+                 start_time_reference: float | None = None,
+                 save_dir: PathLike | None = None,
+                 save_format: Literal['json', 'dill'] = 'json',
+                 log_id: str | None = None,
+                 log_tags: list[str] | None = None,
+                 log_level: int | str = logging.DEBUG,
+                 log_format: str = DEFAULT_LOG_FORMAT,
+                 tags: Iterable[str] | None = None
+                 ) -> None:
+        super().__init__(
+            agent_id=env_id,
+            log_id=log_id,
+            log_tags=log_tags,
+            log_level=log_level,
+            log_format=log_format
+        )
+
+        self.id = env_id
+        self.tags = list(tags) if tags is not None else []
+        self._save_dir = Path(save_dir) if save_dir is not None else None
+        self._save_format = save_format
+        if start_time_reference is None:
+            start_time_reference = time.time()
+        self.time = AgentTime(
+            agent_start_ts=start_time_reference if start_time_reference is not None else time.time(),
+            exec_start_ts=start_time_reference if start_time_reference is not None else time.time()
+        )
+        self._exec_duration = exec_duration
+
+        self.base = base
+        self.state = base.state
+
+        self._main_task_group: asyncio.TaskGroup | None = None
+
+        signal.signal(signal.SIGINT, self.on_kill)
+        signal.signal(signal.SIGTERM, self.on_kill)
+
+    def set_start_time(self, start_time_reference: float | None) -> None:
+        self.time = AgentTime(
+            agent_start_ts=start_time_reference,
+            exec_start_ts=start_time_reference
+        )
+
+    @abstractmethod
+    async def initialize(self) -> None:
+        pass
+
+    @abstractmethod
+    async def on_start(self) -> None:
+        pass
+
+    async def start(self) -> None:
+        async with asyncio.TaskGroup() as tg:
+            self._main_task_group = tg
+            tg.create_task(self.on_start())
+            tg.create_task(self._timeout())
+
+    async def _timeout(self) -> None:
+        await asyncio.sleep(self._exec_duration)
+
+        self.log(logging.INFO, f'Execution timeout, {'saving the state and ' if self._save_dir is not None else ''}exiting...')
+        await self.stop()
+
+    @abstractmethod
+    async def on_stop(self):
+        pass
+
+    async def stop(self) -> None:
+        self.log(logging.INFO, 'Stopping environment...')
+        await self.on_stop()
+        if self._save_dir is not None:
+            self.log(logging.DEBUG, 'Saving environment state before exiting...')
+            self.save_state()
+
     @abstractmethod
     def send_response(self, recipient_id: str, channel: str, msg: Message, **kwargs) -> None:
         """
@@ -120,9 +164,9 @@ class MHAEnvironment(MHABase, ABC):
 
     def _on_observation_request(self, sender: str, channel: str, msg: Message) -> None:
         try:
-            self.state, response = self.on_observe(state=self.state, sender_id=sender, **msg.body)
+            self.state, response = self.base.on_observe(state=self.state, sender_id=sender, **msg.body)
             msg = Message(
-                body=msg.body,
+                body=response,
                 sender_id=self.id,
                 recipient_id=sender,
                 ts=self.time.agent,
@@ -135,7 +179,7 @@ class MHAEnvironment(MHABase, ABC):
 
     def _on_action_request(self, sender: str, channel: str, msg: Message) -> None:
         try:
-            result = self.on_action(state=self.state, sender_id=sender, **msg.body)
+            result = self.base.on_action(state=self.state, sender_id=sender, **msg.body)
             if isinstance(result, tuple):
                 self.state, response = result
             else:
@@ -143,7 +187,7 @@ class MHAEnvironment(MHABase, ABC):
                 response = None
             if response is not None:
                 msg = Message(
-                    body=msg.body,
+                    body=response,
                     sender_id=self.id,
                     recipient_id=sender,
                     ts=self.time.agent,
@@ -153,6 +197,26 @@ class MHAEnvironment(MHABase, ABC):
         except Exception as ex:
             self.warning(f'Caught exception \"{ex}\" while processing action {msg.short_id} from {sender})!'
                          f' Aborting processing and attempting to resume execution...')
+
+    def on_kill(self, signum: int | signal.Signals, frame: FrameType) -> None:
+        self.stop()
+
+    def save_state(self) -> None:
+        if self._save_dir is None:
+            return
+        path = self._save_dir
+        path.mkdir(exist_ok=True)
+        path /= f'{self.id}.sav'
+        match self._save_format:
+            case 'json':
+                path = path.with_suffix('.json')
+                with open(path, 'w') as f:
+                    json.dump(self.state, f)
+            case 'dill':
+                with open(path, 'wb') as f:
+                    dill.dump(self.state, f)
+            case _:
+                raise ValueError(f'Unsupported save format: {self._save_format}!')
 
     @property
     def _logger_extras(self) -> LoggerExtras | None:

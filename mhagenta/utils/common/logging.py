@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import logging
 
 
-DEFAULT_FORMAT = '[%(agent_time)f|%(mod_time)f|%(exec_time)s][%(levelname)s]::%(tags)s::%(message)s'
+DEFAULT_FORMAT = '[%(asctime)s|%(agent_time)f|%(mod_time)f|%(exec_time)s][%(levelname)s]::%(tags)s::%(message)s'
 
 
 class LoggerExtras(BaseModel):

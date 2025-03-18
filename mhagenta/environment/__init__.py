@@ -1,4 +1,4 @@
-from mhagenta.environment.environment import MHAEnvironment
+from mhagenta.environment.environment import MHAEnvironment, MHAEnvBase
 
 
-__all__ = ['MHAEnvironment']
+__all__ = ['MHAEnvironment', 'MHAEnvBase']
