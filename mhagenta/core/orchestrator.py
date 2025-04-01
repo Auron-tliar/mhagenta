@@ -635,9 +635,9 @@ class Orchestrator:
                 tg.create_task(self._monitor.run())
             # if self._environment is not None:
             #     tg.create_task(self._read_logs())
+            tg.create_task(self._simulation_end_timer())
             for agent in self._agents.values():
                 tg.create_task(self._run_agent(agent, force_run=force_run))
-                tg.create_task(self._simulation_end_timer())
                 tg.create_task(self._read_logs(agent, gui))
         self._running = False
         for agent in self._agents.values():
