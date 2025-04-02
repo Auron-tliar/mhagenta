@@ -575,7 +575,7 @@ class Orchestrator:
             )
 
     async def arun(self,
-                   mhagenta_version: str = '1.1.1',
+                   mhagenta_version: str = 'latest',
                    force_run: bool = False,
                    gui: bool = False,
                    rebuild_agents: bool = True,
@@ -585,7 +585,7 @@ class Orchestrator:
         """Run all the agents as an async method. Use in case you want to control the async task loop yourself.
 
         Args:
-            mhagenta_version (str, optional): Version of mhagenta base container. Defaults to '1.1.1'.
+            mhagenta_version (str, optional): Version of mhagenta base container. Defaults to 'latest'.
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.
@@ -657,7 +657,7 @@ class Orchestrator:
         print('===== EXECUTION FINISHED =====')
 
     def run(self,
-            mhagenta_version='1.1.1',
+            mhagenta_version='latest',
             force_run: bool = False,
             gui: bool = False,
             rebuild_agents: bool = True,
@@ -667,7 +667,7 @@ class Orchestrator:
         """Run all the agents.
 
         Args:
-            mhagenta_version (str, optional): Version of mhagenta base container. Defaults to '1.1.1'.
+            mhagenta_version (str, optional): Version of mhagenta base container. Defaults to 'latest'.
             force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
                 specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
                 raised.

@@ -14,6 +14,7 @@ RUN if [ "$PRE_VERSION" = "true" ] ; then \
             pip install . && \
             cd / ; \
         else \
-            pip install mhagenta ; \
+            pip install --upgrade mhagenta ; \
         fi ; \
     fi
+RUN pip show mhagenta
