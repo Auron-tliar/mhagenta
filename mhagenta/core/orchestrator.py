@@ -629,6 +629,8 @@ class Orchestrator:
                 ],
                 stdout=None,
             )
+            if not self._agents:
+                self._simulation_end_ts = time.time() + self._exec_duration_sec + self._agent_start_delay
         async with asyncio.TaskGroup() as tg:
             self._task_group = tg
             if gui:
