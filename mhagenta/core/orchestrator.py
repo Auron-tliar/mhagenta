@@ -421,7 +421,7 @@ class Orchestrator:
         return directory
 
     def _docker_build_base(self,
-                           mhagenta_version: str = '1.1.1',
+                           mhagenta_version: str = 'latest',
                            local_build: PathLike | None = None,
                            prerelease: bool = False
                            ) -> None:
@@ -635,9 +635,9 @@ class Orchestrator:
                 tg.create_task(self._monitor.run())
             # if self._environment is not None:
             #     tg.create_task(self._read_logs())
+            tg.create_task(self._simulation_end_timer())
             for agent in self._agents.values():
                 tg.create_task(self._run_agent(agent, force_run=force_run))
-                tg.create_task(self._simulation_end_timer())
                 tg.create_task(self._read_logs(agent, gui))
         self._running = False
         for agent in self._agents.values():

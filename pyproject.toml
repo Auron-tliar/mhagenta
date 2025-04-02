@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mhagenta"
-version = "1.2.0"
+version = "1.2.2"
 description = "MHAgentA allows you to design and run simulations with containerized Modular Hybrid Agents."
 authors = ["Dmitry Gnatyshak <dmitry.gnatyshak@gmail.com>"]
 readme = "README.md"
