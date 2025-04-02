@@ -421,7 +421,7 @@ class Orchestrator:
         return directory
 
     def _docker_build_base(self,
-                           mhagenta_version: str = '1.1.1',
+                           mhagenta_version: str = 'latest',
                            local_build: PathLike | None = None,
                            prerelease: bool = False
                            ) -> None:
