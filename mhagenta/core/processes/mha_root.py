@@ -40,7 +40,7 @@ def initialize_module(
         'kwargs': kwargs
     }
     with open(path, 'wb') as f:
-        dill.dump(params, f)
+        dill.dump(params, f, recurse=True)
 
     return subprocess.Popen([
         f'{Path(sys.executable).resolve()}',

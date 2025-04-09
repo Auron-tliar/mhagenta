@@ -12,9 +12,9 @@ class RMQReceiverBase(PerceptorBase):
     """
     Extended receiver (Perceptor) base class for inter-agent communication.
     """
-    def __init__(self, agent_id: str, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta', **kwargs):
+    def __init__(self, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta', **kwargs):
         super().__init__(**kwargs)
-        self._agent_id = agent_id
+        # self._agent_id = agent_id
         self.tags.extend(['external', 'receiver', 'rmq', 'messaging'])
         self.conn_params = {
             'host': host,
@@ -31,6 +31,7 @@ class RMQReceiverBase(PerceptorBase):
             host=self.conn_params['host'],
             port=self.conn_params['port'],
             log_tags=[self._agent_id, self.module_id, 'ExternalReceiver'],
+            log_level=self._owner._log_level,
             external_exchange_name=self.conn_params['exchange_name'],
         )
         await self._ext_messenger.initialize()
@@ -102,9 +103,9 @@ class RMQSenderBase(ActuatorBase):
     """
     Extended sender (Actuator) base class for inter-agent communication.
     """
-    def __init__(self, agent_id: str, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta', **kwargs):
+    def __init__(self, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta', **kwargs):
         super().__init__(**kwargs)
-        self._agent_id = agent_id
+        # self._agent_id = agent_id
         self.tags.extend(['external', 'sender', 'rmq', 'messaging'])
         self.conn_params = {
             'host': host,
@@ -121,6 +122,7 @@ class RMQSenderBase(ActuatorBase):
             host=self.conn_params['host'],
             port=self.conn_params['port'],
             log_tags=[self._agent_id, 'ExternalSender'],
+            log_level=self._owner._log_level,
             external_exchange_name=self.conn_params['exchange_name'],
         )
         await self._ext_messenger.initialize()
@@ -165,9 +167,9 @@ class RMQPerceptorBase(PerceptorBase):
     """
     Extended perceptor base class for interacting with RabbitMQ-based environments.
     """
-    def __init__(self, agent_id: str, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta-env', **kwargs):
+    def __init__(self, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta-env', **kwargs):
         super().__init__(**kwargs)
-        self._agent_id = agent_id
+        # self._agent_id = agent_id
         self.tags.extend(['external', 'perceptor', 'rmq', 'env-perceptor'])
         self.conn_params = {
             'host': host,
@@ -183,7 +185,8 @@ class RMQPerceptorBase(PerceptorBase):
             agent_time=self._owner.time,
             host=self.conn_params['host'],
             port=self.conn_params['port'],
-            log_tags=[self._agent_id, 'RMQPerceptor'],
+            log_tags=[self._agent_id, self.module_id],
+            log_level=self._owner._log_level,
             external_exchange_name=self.conn_params['exchange_name'],
         )
         await self._connector.initialize()
@@ -256,9 +259,9 @@ class RMQActuatorBase(ActuatorBase):
     """
     Extended actuator base class for interacting with RabbitMQ-based environments.
     """
-    def __init__(self, agent_id: str, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta-env', **kwargs):
+    def __init__(self, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta-env', **kwargs):
         super().__init__(**kwargs)
-        self._agent_id = agent_id
+        # self._agent_id = agent_id
         self.tags.extend(['external', 'actuator', 'rmq', 'env-actuator'])
         self.conn_params = {
             'host': host,
@@ -274,7 +277,8 @@ class RMQActuatorBase(ActuatorBase):
             agent_time=self._owner.time,
             host=self.conn_params['host'],
             port=self.conn_params['port'],
-            log_tags=[self._agent_id, self.module_id, 'RMQActuator'],
+            log_tags=[self._agent_id, self.module_id],
+            log_level=self._owner._log_level,
             external_exchange_name=self.conn_params['exchange_name'],
         )
         await self._connector.initialize()

@@ -49,6 +49,7 @@ class RMQEnvironment(MHAEnvironment):
             host=host,
             port=port,
             log_tags=[self.id, 'Environment'],
+            log_level=log_level,
             external_exchange_name=exchange_name,
         )
 

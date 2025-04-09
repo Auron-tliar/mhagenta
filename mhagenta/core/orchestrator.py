@@ -237,7 +237,7 @@ class Orchestrator:
                         exec_duration: float | None = None,
                         exchange_name: str | None = None,
                         log_tags: list[str] | None = None,
-                        log_level: int | str = logging.DEBUG,
+                        log_level: int | str | None = None,
                         log_format: str | None = None,
                         tags: Iterable[str] | None = None
                         ) -> None:
@@ -281,6 +281,10 @@ class Orchestrator:
             tags=tags
         )
 
+    def _update_external_host(self, module: ActuatorBase | PerceptorBase):
+        if 'external' in module.tags and module.conn_params['host'] == 'localhost':
+            module.conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
+
     def add_agent(self,
                   agent_id: str,
                   perceptors: Iterable[PerceptorBase] | PerceptorBase,
@@ -299,6 +303,7 @@ class Orchestrator:
                   start_delay: float = 0.,
                   exec_duration: float | None = None,
                   resume: bool | None = None,
+                  requirements_path: PathLike | None = None,
                   log_level: int | None = None,
                   port_mapping: dict[int, int] | None = None,
                   connector_cls: type[Connector] | None = None,
@@ -340,6 +345,7 @@ class Orchestrator:
                 this time. Defaults to the Orchestrator's `exec_duration`.
             resume (bool, optional): Specifies whether to use save module states when restarting an agent with
                 preexisting ID. Defaults to the Orchestrator's `resume`.
+            requirements_path (PathLike, optional): Additional agent requirements to install on agent side.
             log_level (int, optional):  Logging level for the agent. Defaults to the Orchestrator's `log_level`.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
                 Defaults to the Orchestrator's `port_mapping`.
@@ -352,14 +358,17 @@ class Orchestrator:
             tags (Iterable[str], optional): a list of tags associated with this agent for directory search.
 
         """
-        for actuator in actuators:
-            if 'external' in actuator.tags:
-                if actuator.conn_params['host'] == 'localhost':
-                    actuator.conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
-        for perceptor in perceptors:
-            if 'external' in perceptor.tags:
-                if perceptor.conn_params['host'] == 'localhost':
-                    perceptor.conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
+        if isinstance(actuators, Iterable):
+            for actuator in actuators:
+                self._update_external_host(actuator)
+        else:
+            self._update_external_host(actuators)
+
+        if isinstance(perceptors, Iterable):
+            for perceptor in perceptors:
+                self._update_external_host(perceptor)
+        else:
+            self._update_external_host(perceptors)
 
         kwargs = {
             'agent_id': agent_id,
@@ -386,6 +395,9 @@ class Orchestrator:
             'log_format': self._log_format,
             'status_msg_format': self._status_msg_format
         }
+
+        if requirements_path is not None:
+            kwargs['requirements_path'] = str(requirements_path)
 
         self._agents[agent_id] = AgentEntry(
             agent_id=agent_id,
@@ -519,6 +531,10 @@ class Orchestrator:
         end_estimate = agent.kwargs['exec_start_time'] + agent.kwargs['start_delay'] + agent.kwargs['exec_duration']
         if self._simulation_end_ts < end_estimate:
             self._simulation_end_ts = end_estimate
+
+        if 'requirements_path' in agent.kwargs:
+            requirements_path = agent.kwargs.pop('requirements_path')
+            shutil.copy(requirements_path, (build_dir / 'src' / 'requirements.txt').resolve())
 
         with open((build_dir / 'src' / 'agent_params').resolve(), 'wb') as f:
             dill.dump(agent.kwargs, f, recurse=True)
