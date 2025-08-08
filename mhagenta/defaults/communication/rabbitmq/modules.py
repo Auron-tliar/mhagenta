@@ -73,10 +73,6 @@ class RMQReceiverBase(PerceptorBase):
 
     def _on_message_callback(self, sender: str, channel: str, msg: Message) -> None:
         if self._owner._stage == self._owner.Stage.running:
-
-            self.log(logging.DEBUG, f'>>>>> Received message {msg.short_id} from {sender} during the running stage.')
-
-
             self._owner._queue.push(
                 func=self._on_message_task,
                 ts=self._owner.time.agent,
@@ -85,8 +81,6 @@ class RMQReceiverBase(PerceptorBase):
                 msg=msg
             )
         else:
-            self.log(logging.DEBUG, f'>>>>> Received message {msg.short_id} from {sender} before the running stage.')
-
             self._owner._queue.push(
                 func=self._on_message_task,
                 ts=self._owner.time.agent,
@@ -207,26 +201,28 @@ class RMQPerceptorBase(PerceptorBase):
     async def _internal_stop(self) -> None:
         await self._connector.stop()
 
-    def observe(self, **kwargs) -> None:
-        self.log(logging.DEBUG, f'Sending observation request to \"{self.state.directory.external.environment.address['env_id']}\".')
+    def observe(self, env_id: str | None = None, **kwargs) -> None:
+        env_id = self.state.directory.external.environment.address['env_id'] if env_id is None else env_id
+        self.log(logging.DEBUG, f'Sending observation request to \"{env_id}\".')
         self._connector.send(
-            recipient=self.state.directory.external.environment.address['env_id'],
+            recipient=env_id,
             channel='',
             msg=Message(
                 body=kwargs,
                 sender_id=self._agent_id,
-                recipient_id=self.state.directory.external.environment.address['env_id'],
+                recipient_id=env_id,
                 ts=self._owner.time.agent,
                 performative=Performatives.OBSERVE
             )
         )
 
-    def on_observation(self, state: PerceptorState, **kwargs) -> PerceptorState:
+    def on_observation(self, state: PerceptorState, env_id: str, **kwargs) -> PerceptorState:
         """
         Override to define reaction to an observation (e.g. forward it to a low-level reasoner).
 
         Args:
             state (PerceptorState): perceptor state.
+            env_id (str): environment id.
             **kwargs:
 
         Returns:
@@ -237,7 +233,7 @@ class RMQPerceptorBase(PerceptorBase):
     def _on_observation_task(self, sender: str, msg: Message) -> None:
         try:
             self.log(logging.DEBUG, f'Received observation {msg.short_id} from the environment.')
-            update = self.on_observation(self.state, **msg.body)
+            update = self.on_observation(self.state, env_id=sender, **msg.body)
             self._owner._process_update(update)
         except Exception as ex:
             self._owner.warning(
@@ -294,15 +290,16 @@ class RMQActuatorBase(ActuatorBase):
     async def _internal_stop(self) -> None:
         await self._connector.stop()
 
-    def act(self, **kwargs) -> None:
-        self.log(logging.DEBUG, f'Sending action request to \"{self.state.directory.external.environment.address['env_id']}\".')
+    def act(self, env_id: str | None = None, **kwargs) -> None:
+        env_id = self.state.directory.external.environment.address['env_id'] if env_id is None else env_id
+        self.log(logging.DEBUG, f'Sending action request to \"{env_id}\".')
         self._connector.send(
-            recipient=self.state.directory.external.environment.address['env_id'],
+            recipient=env_id,
             channel='',
             msg=Message(
                 body=kwargs,
                 sender_id=self._agent_id,
-                recipient_id=self.state.directory.external.environment.address['env_id'],
+                recipient_id=env_id,
                 ts=self._owner.time.agent,
                 performative=Performatives.ACT
             )

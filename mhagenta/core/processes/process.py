@@ -203,22 +203,6 @@ class ExecQueue:
     def _agent_time(self) -> float:
         return time.time() - self._start_ts
 
-    def _periodic_add_task(self, task: Task) -> Task:
-        def add() -> None:
-            if task.stop_check:
-                return
-            next_task = task.copy(max(task.ts + task.frequency, self._agent_time))
-            if task.priority:
-                heapq.heappush(self._priority_queue, next_task.queue_item)
-            else:
-                heapq.heappush(self._queue, next_task.queue_item)
-        return Task(
-            func=add,
-            ts=task.ts,
-            priority=task.priority,
-            periodic=False
-        )
-
     def __str__(self) -> str:
         return f'{self.__class__.__name__}(Priority: {self._priority_queue}, regular; {self._queue})'
 
@@ -338,14 +322,8 @@ class MHAProcess(MHABase, ABC):
                 if self._stage != prev_stage:
                     await self.on_stage_change()
                 prev_stage = self._stage
-
-                # if  self._queue.pending:
-                #     self.log(5, f'Executing task: {self._queue.peek()}. Queue length: {len(self._queue)}.')
                 self._queue.run_next(priority=(self._stage != self.Stage.running))
-                # if task is not None:
-                #     task()
 
-                # self._error_status = None
             except Exception as ex:
                 await self.on_error(ex)
             await asyncio.sleep(min(self._control_frequency, self._queue.next_wait()))

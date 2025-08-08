@@ -247,8 +247,10 @@ class MHAModule(MHAProcess):
 
     def _run(self) -> None:
         self._stage = self.Stage.running
+        self.info('Running...')
 
     async def on_run(self) -> None:
+        self._report_status()
         self._on_first_step()
         if not self._base.is_reactive:
             self._queue.push(
@@ -297,6 +299,7 @@ class MHAModule(MHAProcess):
             case cmd.START:
                 self.info(f'Received {cmd.START} command (start ts: {cmd.args["start_ts"] if "start_ts" in cmd.args else "-"}, {(cmd.args["start_ts"] - self._time.system) if "start_ts" in cmd.args else "-"} seconds from now)')
                 start_ts = cmd.args['start_ts'] if 'start_ts' in cmd.args else self._time.agent + self._time.system
+
                 self._time.set_exec_start_ts(start_ts)  # self._time.agent_start_ts +
                 self._stop_time = start_ts - self._time.system + self._time.agent + self._exec_duration
                 # self._stage = self.Stage.starting

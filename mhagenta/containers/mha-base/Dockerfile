@@ -17,4 +17,5 @@ RUN if [ "$PRE_VERSION" = "true" ] ; then \
             pip install --upgrade mhagenta ; \
         fi ; \
     fi
+RUN pip install torch torchvision
 RUN pip show mhagenta

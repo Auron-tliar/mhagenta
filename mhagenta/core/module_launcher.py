@@ -37,6 +37,7 @@ if __name__ == "__main__":
         exit('Expected [params_path] as an argument!')
 
     file_path = Path(argv[1].replace('\"', ''))
+
     with open(file_path, 'rb') as f:
         params = dill.load(f)
     os.remove(file_path)

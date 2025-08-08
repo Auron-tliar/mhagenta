@@ -261,7 +261,6 @@ class MHARoot(MHAProcess):
         if not all([module.ready for module in self._modules.values()]):
             return
 
-        # self.debug(f'>>>>> Current time: {self._time.system}, time.time: {time.time()}, expected: {self._expected_start_time}, delay: {self._start_delay}, current - delayed start: {self._time.system - (self._expected_start_time + self._start_delay)}')
         self._time.set_exec_start_ts(
             max(
                 self._time.system,

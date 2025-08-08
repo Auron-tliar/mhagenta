@@ -188,6 +188,13 @@ class TagCard[T](ABC):
     def __eq__(self, other: str) -> bool:
         return self.id == other
 
+    @abstractmethod
+    def __str__(self) -> str:
+        pass
+
+    def __repr__(self) -> str:
+        return str(self)
+
 
 
 class ICard(TagCard[str]):
@@ -200,6 +207,9 @@ class ICard(TagCard[str]):
     def id(self) -> str:
         return self.module_id
 
+    def __str__(self) -> str:
+        return f'ICard({self.module_id}: {self.module_type}, {list(self.tags)})'
+
 
 class ECard(TagCard[str]):
     def __init__(self, agent_id: str, address: dict[str, Any], tags: Iterable[str] | None = None) -> None:
@@ -210,6 +220,9 @@ class ECard(TagCard[str]):
     @property
     def id(self) -> str:
         return self.agent_id
+
+    def __str__(self) -> str:
+        return f'ECard({self.agent_id} @ {self.address}, {list(self.tags)})'
 
 
 class BaseDirectory:
@@ -236,6 +249,12 @@ class BaseDirectory:
     def _add(self, card: TagCard[str]) -> None:
         self._content.append(card)
         self._by_id[card.id] = card
+
+    def __str__(self) -> str:
+        return f'Directory(\n\t{'\n\t'.join([str(card) for card in self._content])})'
+
+    def __repr__(self) -> str:
+        return str(self)
 
 
 class IDirectory(BaseDirectory):
@@ -349,26 +368,39 @@ class IDirectory(BaseDirectory):
     def search(self, tags: Iterable[str]) -> list[ICard]:
         return super().search(tags)
 
+    def __str__(self) -> str:
+        return f'IDirectory(\n\t{'\n\t'.join([str(card) for card in self._content])})'
+
 
 class EDirectory(BaseDirectory):
     ENVIRONMENT = 'environment'
     localhost_win = 'host.docker.internal'
     localhost_linux = 'http://172.17.0.1'
 
-
     def __init__(self,
-                 env_address: dict[str, Any] | None = None,
-                 env_tags: Iterable[str] | None = None
+                 # env_address: dict[str, dict[str, Any]] | None = None,
+                 # env_tags: Iterable[str] | None = None
                  ) -> None:
-        if env_address is None:
-            super().__init__()
-            return
+        # if env_address is None:
+        super().__init__()
+        return
+        #
+        # tags = [self.ENVIRONMENT]
+        # if env_tags is not None:
+        #     tags.extend(env_tags)
+        # env_card = ECard(self.ENVIRONMENT, env_address, tags)
+        # super().__init__([env_card])
 
-        tags = [self.ENVIRONMENT]
-        if env_tags is not None:
-            tags.extend(env_tags)
-        env_card = ECard(self.ENVIRONMENT, env_address, tags)
-        super().__init__([env_card])
+    def add_env(self, env_id: str, address: dict[str, Any], tags: Iterable[str] | None = None) -> ECard:
+        if tags is None:
+            tags = list()
+        else:
+            tags = list(tags)
+        if self.ENVIRONMENT not in tags:
+            tags.append(self.ENVIRONMENT)
+        card = ECard(env_id, address, tags)
+        self._add(card)
+        return card
 
     def add_agent(self, agent_id: str, address: Any, tags: Iterable[str] | None = None) -> ECard:
         card = ECard(agent_id, address, tags)
@@ -382,16 +414,24 @@ class EDirectory(BaseDirectory):
         return super().search(tags)
 
     @property
+    def environments(self) -> list[ECard]:
+        return self.search([self.ENVIRONMENT])
+
+    @property
     def environment(self) -> ECard | None:
-        return self[self.ENVIRONMENT] if self.ENVIRONMENT in self._by_id else None
+        envs = self.environments
+        return envs[0] if envs else None
+
+    def __str__(self) -> str:
+        return f'Directory(\n\t{'\n\t'.join([str(card) for card in self._content])})'
 
 
 class Directory:
-    def __init__(self,
-                 env_address: Any | None = None,
-                 env_tags: Iterable[str] | None = None):
+    def __init__(self) -> None:
+                 # env_address: Any | None = None,
+                 # env_tags: Iterable[str] | None = None):
         self._internal = IDirectory()
-        self._external = EDirectory(env_address=env_address, env_tags=env_tags)
+        self._external = EDirectory()
 
     @property
     def internal(self) -> IDirectory:
@@ -400,6 +440,12 @@ class Directory:
     @property
     def external(self) -> EDirectory:
         return self._external
+
+    def __str__(self) -> str:
+        return f'Directory(\n{str(self._internal)},\n{str(self.external.__str__())})'
+
+    def __repr__(self) -> str:
+        return str(self)
 
 
 @dataclass

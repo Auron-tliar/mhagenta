@@ -289,7 +289,7 @@ class RabbitMQConnector(Connector):
                  sender_id: str,
                  agent_time: AgentTime | None,
                  host: str = 'localhost',
-                 port: int = 5672,
+                 port: int = 25672,
                  prefetch_count: int = 1,
                  is_master: bool = False,
                  log_tags: list[str] = '',

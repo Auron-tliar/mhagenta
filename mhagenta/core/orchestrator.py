@@ -8,15 +8,21 @@ from asyncio import TaskGroup
 from dataclasses import dataclass
 from io import TextIOWrapper
 from os import PathLike
+from datetime import datetime, timedelta
 import socket
 from pathlib import Path
-from typing import Any, Iterable, Literal, Self
+from typing import Any, Iterable, Literal, Self, Callable
 import subprocess
 import signal
+import functools
+import dateutil.parser
+import dateutil.tz
+from pprint import pprint
 
 import dill
 import docker
 import pika
+# from Demos.c_extension.setup import sources
 from pika.adapters import BlockingConnection
 from pika.channel import Channel
 from pika.exceptions import AMQPConnectionError
@@ -48,7 +54,6 @@ class AgentEntry:
     num_copies: int = 1
     save_logs: bool = True
     tags: Iterable[str] | None = None
-    # port: int | None = None
 
     @property
     def module_ids(self) -> list[str]:
@@ -71,13 +76,111 @@ class AgentEntry:
                 module_ids.append(self.kwargs[key].module_id)
         return module_ids
 
+    def __hash__(self) -> int:
+        return hash(self.agent_id)
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, AgentEntry):
+            return False
+        return self.agent_id == other.agent_id
+
 @dataclass
 class EnvironmentEntry:
-    environment: dict[str, Any]
+    env_id: str
+    kwargs: dict[str, Any]
     address: dict[str, Any]
     dir: Path | None = None
     tags: list[str] | None = None
-    process: subprocess.Popen | None = None
+    # process: subprocess.Popen | None = None
+    image: Image | None = None
+    container: Container | None = None
+    port_mapping: dict[int, int] | None = None
+
+    def __hash__(self) -> int:
+        return hash(self.env_id)
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, EnvironmentEntry):
+            return False
+        return self.env_id == other.env_id
+
+
+class LogParser:
+    """
+    Utility class for parsing logs from several containers and outputting them in order of their timestamps.
+    """
+    US = timedelta(microseconds=1)
+
+    @dataclass
+    class SourceInfo:
+        last_ts: datetime
+        path: Path | None = None
+
+    @functools.total_ordering
+    @dataclass
+    class LogEntry:
+        ts: datetime
+        msg: str
+        source: 'LogParser.SourceInfo'
+
+        def __gt__(self, other: 'LogParser.LogEntry') -> bool:
+            return self.ts > other.ts
+
+        def __eq__(self, other: 'LogParser.LogEntry') -> bool:
+            return self.ts == other.ts
+
+    def __init__(self, stop_checker: Callable[[], bool], check_freq: float = 1., save_logs: PathLike | None = None) -> None:
+        # self._containers: list[AgentEntry | EnvironmentEntry] = list()
+        self._sources: dict[AgentEntry | EnvironmentEntry, LogParser.SourceInfo] = dict()
+        self._check_freq: float = check_freq
+        self._stop_checker: Callable[[], bool] = stop_checker
+        self._save_logs: Path | None = Path(save_logs) if save_logs else None
+
+        self._init_ts = datetime.now()
+
+    def add_container(self, source: AgentEntry | EnvironmentEntry) -> None:
+        sid: str
+        if isinstance(source, EnvironmentEntry):
+            sid = source.env_id
+        else:
+            sid = source.agent_id
+        self._sources[source] = self.SourceInfo(
+            last_ts=self._init_ts,
+            path=(self._save_logs / f'{sid}.log') if self._save_logs is not None else None
+        )
+
+    @staticmethod
+    def _add_log(log: str | bytes, save_path: Path | None = None) -> None:
+        if isinstance(log, bytes):
+            log = log.decode().strip('\n\r')
+        print(log)
+        if save_path is not None:
+            with open(save_path, 'a') as f:
+                f.write(f'{log}\n')
+
+    async def run(self) -> None:
+        logs: list[LogParser.LogEntry] = list()
+        log_lines: list[str]
+
+        while True:
+            if self._stop_checker():
+                break
+            for source, info in self._sources.items():
+                raw_log = source.container.logs(stdout=True, stderr=True, tail='all', timestamps=True, since=(info.last_ts + self.US).timestamp())
+                log_lines = raw_log.decode('utf-8').strip().split('\n')
+                for log in log_lines:
+                    if not log.strip():
+                        continue
+                    ts, msg = log.strip().split(' ', maxsplit=1)
+                    ts = dateutil.parser.parse(ts).replace(tzinfo=dateutil.tz.UTC)
+                    msg = msg.strip()
+                    logs.append(self.LogEntry(ts=ts, msg=msg, source=info))
+                    info.last_ts = ts
+            logs.sort()
+            for entry in logs:
+                self._add_log(entry.msg, save_path=entry.source.path)
+            logs.clear()
+            await asyncio.sleep(self._check_freq)
 
 
 class Orchestrator:
@@ -134,7 +237,7 @@ class Orchestrator:
                 `exec_start_time` is not defined to stage synchronous agents start at `agent_start_delay` seconds from
                 the `run()` or `arun()` call.
             exec_duration (float, optional, default=60.0):  Time limit for agent execution in seconds. All agents will
-                timeout after this time.
+                time out after this time.
             save_format (Literal['json', 'dill'], optional, default='json'): Format of agent modules state save files. JSON
                 is more restrictive of what fields the states can include, but it is readable by humans.
             resume (bool, optional, default=False): Specifies whether to use save module states when restarting an
@@ -160,7 +263,7 @@ class Orchestrator:
             raise RuntimeError(f'OS {os.name} is not supported.')
 
         self._agents: dict[str, AgentEntry] = dict()
-        self._environment: EnvironmentEntry | None = None
+        self._environments: dict[str, EnvironmentEntry] = dict()
 
         save_dir = Path(save_dir).resolve()
         if isinstance(save_dir, str):
@@ -226,44 +329,73 @@ class Orchestrator:
         self._stopping = False
         self._all_stopped = False
 
+        self._log_parser = LogParser(
+            stop_checker=lambda: self._stopping and self._agents_stopped,
+            check_freq=1.,
+            save_logs=self._save_dir
+        )
+
     def _docker_init(self) -> None:
         self._docker_client = docker.from_env()
 
-    def set_environment(self,
+    def add_environment(self,
                         base: MHAEnvBase,
                         env_id: str = "environment",
                         host: str | None = 'localhost',
                         port: int | None = 5672,
                         exec_duration: float | None = None,
                         exchange_name: str | None = None,
+                        init_script: PathLike | None = None,
+                        requirements_path: PathLike | None = None,
+                        port_mapping: dict[int, int] | None = None,
                         log_tags: list[str] | None = None,
                         log_level: int | str | None = None,
                         log_format: str | None = None,
                         tags: Iterable[str] | None = None
                         ) -> None:
+        """
+        Add a configuration of an environment to build at the runtime.
+
+        Args:
+            base (MHAEnvBase): The base environment object implementing the environment behaviour.
+            env_id (str): Unique identifier for the environment. Defaults to 'environment'.
+            host (str, optional): RabbitMQ host address; will use one from the Orchestrator if None. Defaults to 'localhost'.
+            port (int, optional): RabbitMQ port; will use one from the Orchestrator if None. Defaults to 5672.
+            exec_duration (float, optional): execution duration of the environment, will derive from the Orchestrator
+                configuration if None. Defaults to None.
+            exchange_name (str, optional): Name of RabbitMQ exchange for inter-agent communication. Will use the default
+                one for MAS if None. Defaults to None.
+            init_script (PathLike, optional): Path to an optional bash script to be run before launching the environment.
+                Use it to install additional non-Python dependencies. Defaults to None.
+            requirements_path (PathLike, optional): Path to Python dependencies file. Defaults to None.
+            port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
+                Defaults to the Orchestrator's `port_mapping`.
+            log_tags (list[str], optional): List of tags to add to log messages. Defaults to None.
+            log_level (int, optional): Log level; will use the Orchestrator's log level in None. Defaults to None.
+            log_format (str, optional): Log format string; will use the Orchestrator's log format. Defaults to None.
+            tags (Iterable[str], optional): List of tags for agent directory. Defaults to None.
+
+        Returns:
+
+        """
         from mhagenta.defaults.communication.rabbitmq import RMQEnvironment
         if host is None:
             mas_host, mas_port = self._mas_rmq_uri.split(':')
             host = mas_host
             if port is None:
                 port = mas_port
-        # if host == 'localhost':
-        #     if sys.platform == 'linux':
-        #         host = EDirectory.localhost_linux
-        #     else:
-        #         host = EDirectory.localhost_win
         env_dir = self._save_dir.resolve() / env_id
         env_dir.mkdir(parents=True, exist_ok=True)
-        environment = {
+        kwargs = {
             'env_class': RMQEnvironment,
             'base': base,
             'env_id': env_id,
-            'host': host,
+            'host': host if host != 'localhost' and host != '127.0.0.1' else 'host.docker.internal',
             'port': port,
             'exec_duration': (exec_duration if exec_duration else self._exec_duration_sec) + self._agent_start_delay,
             'exchange_name': exchange_name if exchange_name is not None else self._mas_rmq_exchange_name,
             'start_time_reference': None,
-            'save_dir': env_dir,
+            'save_dir': f'/{self.SAVE_SUBDIR}',
             'save_format': self._save_format,
             'log_id': env_id,
             'log_tags': log_tags if log_tags is not None else [],
@@ -271,14 +403,22 @@ class Orchestrator:
             'log_level': log_level if log_level is not None else self._log_level,
             'tags': tags
         }
-        self._environment = EnvironmentEntry(
-            environment=environment,
+
+        if requirements_path is not None:
+            kwargs['requirements_path'] = Path(requirements_path).resolve()
+        if init_script is not None:
+            kwargs['init_script'] = Path(init_script).resolve()
+
+        self._environments[env_id] = EnvironmentEntry(
+            env_id=env_id,
+            kwargs=kwargs,
             address={
-                'exchange_name': environment['exchange_name'],
+                'exchange_name': kwargs['exchange_name'],
                 'env_id': env_id
             },
             dir=env_dir,
-            tags=tags
+            tags=tags,
+            port_mapping=port_mapping if port_mapping else self._port_mapping
         )
 
     def _update_external_host(self, module: ActuatorBase | PerceptorBase):
@@ -303,6 +443,7 @@ class Orchestrator:
                   start_delay: float = 0.,
                   exec_duration: float | None = None,
                   resume: bool | None = None,
+                  init_script: PathLike | None = None,
                   requirements_path: PathLike | None = None,
                   log_level: int | None = None,
                   port_mapping: dict[int, int] | None = None,
@@ -341,11 +482,13 @@ class Orchestrator:
                 execution as soon as it finishes initializing). Defaults to the Orchestrator's `exec_start_time`.
             start_delay (float, optional, default=0.0): A time offset from the global execution time start when this agent will
                 attempt to start its own execution.
-            exec_duration (float, optional): Time limit for agent execution in seconds. The agent will timeout after
+            exec_duration (float, optional): Time limit for agent execution in seconds. The agent will time out after
                 this time. Defaults to the Orchestrator's `exec_duration`.
             resume (bool, optional): Specifies whether to use save module states when restarting an agent with
                 preexisting ID. Defaults to the Orchestrator's `resume`.
-            requirements_path (PathLike, optional): Additional agent requirements to install on agent side.
+            init_script (PathLike, optional): Path to an optional bash script to be run before launching the agent.
+                Use it to install additional non-Python dependencies. Defaults to None.
+            requirements_path (PathLike, optional): Additional Python requirements to install on agent side.
             log_level (int, optional):  Logging level for the agent. Defaults to the Orchestrator's `log_level`.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
                 Defaults to the Orchestrator's `port_mapping`.
@@ -396,8 +539,10 @@ class Orchestrator:
             'status_msg_format': self._status_msg_format
         }
 
+        if init_script is not None:
+            kwargs['init_script'] = Path(init_script).resolve()
         if requirements_path is not None:
-            kwargs['requirements_path'] = str(requirements_path)
+            kwargs['requirements_path'] = Path(requirements_path).resolve()
 
         self._agents[agent_id] = AgentEntry(
             agent_id=agent_id,
@@ -411,12 +556,21 @@ class Orchestrator:
             self._task_group.create_task(self._run_agent(self._agents[agent_id], force_run=self._force_run))
 
     def _compose_directory(self) -> Directory:
-        if self._environment is not None:
-            directory = Directory(self._environment.address, self._environment.tags)
-        else:
-            directory = Directory()
-
+        directory = Directory()
         host, port = self._mas_rmq_uri_internal.split(':')
+
+        for env in self._environments.values():
+            directory.external.add_env(
+                env_id=env.env_id,
+                address={
+                    'exchange_name': env.kwargs['exchange_name'],
+                    'env_id': env.env_id,
+                    'host': host,
+                    'port': port
+                },
+                tags=env.kwargs['tags']
+            )
+
 
         for agent in self._agents.values():
             directory.external.add_agent(
@@ -429,7 +583,6 @@ class Orchestrator:
                 },
                 tags=agent.tags
             )
-
         return directory
 
     def _docker_build_base(self,
@@ -478,6 +631,7 @@ class Orchestrator:
                         shutil.copy(local_build / 'README.md', build_dir / 'mha-local' / 'README.md')
                     else:
                         (build_dir / 'mha-local').mkdir(parents=True, exist_ok=True)
+
                     self._base_image, _ = (
                         self._docker_client.images.build(
                             path=str(build_dir),
@@ -532,6 +686,10 @@ class Orchestrator:
         if self._simulation_end_ts < end_estimate:
             self._simulation_end_ts = end_estimate
 
+        if 'init_script' in agent.kwargs:
+            init_script = agent.kwargs.pop('init_script')
+            shutil.copy(init_script, (build_dir / 'src' / 'init_script.sh').resolve())
+
         if 'requirements_path' in agent.kwargs:
             requirements_path = agent.kwargs.pop('requirements_path')
             shutil.copy(requirements_path, (build_dir / 'src' / 'requirements.txt').resolve())
@@ -549,6 +707,53 @@ class Orchestrator:
                                                           rm=True,
                                                           quiet=False
                                                           )
+        shutil.rmtree(build_dir)
+
+    def _docker_build_env(self,
+                          environment: EnvironmentEntry,
+                          rebuild_image: bool = True,
+                            ) -> None:
+        if rebuild_image:
+            try:
+                img = self._docker_client.images.list(name=f'mhagent-env:{environment.env_id}')[0]
+                img.remove(force=True)
+            except IndexError:
+                pass
+        print(f'===== BUILDING AGENT IMAGE: mhagent-env:{environment.env_id} =====')
+        env_dir = self._save_dir.resolve() / environment.env_id
+        if self._force_run and env_dir.exists():
+            shutil.rmtree(env_dir)
+
+        (env_dir / 'out/').mkdir(parents=True)
+        environment.dir = env_dir
+
+        build_dir = env_dir / 'tmp/'
+        shutil.copytree(AGENT_IMG_PATH, build_dir.resolve())
+        (build_dir / 'src').mkdir(parents=True, exist_ok=True)
+        shutil.copy(Path(mhagenta.environment.__file__).parent.resolve() / 'environment_launcher.py', (build_dir / 'src' / 'environment_launcher.py').resolve())
+        shutil.copy(Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'env_start.sh', (build_dir / 'src' / 'start.sh').resolve())
+
+        if 'init_script' in environment.kwargs:
+            init_script = environment.kwargs.pop('init_script')
+            shutil.copy(init_script, (build_dir / 'src' / 'init_script.sh').resolve())
+
+        if 'requirements_path' in environment.kwargs:
+            requirements_path = environment.kwargs.pop('requirements_path')
+            shutil.copy(requirements_path, (build_dir / 'src' / 'requirements.txt').resolve())
+
+        with open((build_dir / 'src' / 'env_params').resolve(), 'wb') as f:
+            dill.dump(environment.kwargs, f, recurse=True)
+
+        base_tag = self._base_image.tags[0].split(':')
+        environment.image, _ = self._docker_client.images.build(path=str(build_dir.resolve()),
+                                                                buildargs={
+                                                                    'SRC_IMAGE': base_tag[0],
+                                                                    'SRC_VERSION': base_tag[1]
+                                                                },
+                                                                tag=f'mhagent-env:{environment.env_id}',
+                                                                rm=True,
+                                                                quiet=False
+                                                                )
         shutil.rmtree(build_dir)
 
     async def _run_agent(self,
@@ -590,13 +795,44 @@ class Orchestrator:
                 ports=agent.port_mapping
             )
 
+    async def _run_env(self,
+                         environment: EnvironmentEntry,
+                         force_run: bool = False
+                         ) -> None:
+        print(f'===== RUNNING ENVIRONMENT IMAGE \"mhagent-env:{environment.env_id}\" AS CONTAINER \"{environment.env_id}\" =====')
+
+        env_dir = (environment.dir / "out").resolve()
+        env_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            container = self._docker_client.containers.get(environment.env_id)
+            if force_run:
+                container.remove(force=True)
+            else:
+                raise NameError(f'Container {environment.env_id} already exists')
+        except NotFound:
+            pass
+
+        environment.container = self._docker_client.containers.run(
+            image=environment.image,
+            detach=True,
+            name=environment.env_id,
+            environment={"AGENT_ID": ''},
+            volumes={
+                str(env_dir): {'bind': '/out', 'mode': 'rw'}
+            },
+            extra_hosts={'host.docker.internal': 'host-gateway'},
+            ports=environment.port_mapping
+        )
+
     async def arun(self,
                    mhagenta_version: str = 'latest',
                    force_run: bool = False,
                    gui: bool = False,
                    rebuild_agents: bool = True,
                    local_build: PathLike | None = None,
-                   prerelease: bool = False
+                   prerelease: bool = False,
+                   keep_containers: bool = False
                    ) -> None:
         """Run all the agents as an async method. Use in case you want to control the async task loop yourself.
 
@@ -612,6 +848,8 @@ class Orchestrator:
                 one from PyPI) to be used for building agents.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
                 version of mhagenta while building the container.
+            keep_containers (bool, optional, default=False): Whether to keep or remove the agent and environment
+                containers after the execution.
 
         Raises:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
@@ -623,6 +861,8 @@ class Orchestrator:
             self._docker_build_base(mhagenta_version=mhagenta_version, local_build=local_build, prerelease=prerelease)
 
         self._force_run = force_run
+        for env in self._environments.values():
+            self._docker_build_env(env, rebuild_image=rebuild_agents)
         for agent in self._agents.values():
             self._docker_build_agent(agent, rebuild_image=rebuild_agents)
 
@@ -633,20 +873,6 @@ class Orchestrator:
 
         self.start_rabbitmq()
 
-        if self._environment is not None:
-            self._environment.environment['exec_duration'] -= (time.time() - self._start_time)
-            env_param_path = (self._environment.dir / 'params').resolve()
-            with open(env_param_path, 'wb') as f:
-                dill.dump(self._environment.environment, f, recurse=True)
-            self._environment.process = subprocess.Popen([
-                    f'{Path(sys.executable).resolve()}',
-                    f'{(Path(__file__).parent.parent / "environment" / "environment_launcher.py").resolve()}',
-                    str(env_param_path)
-                ],
-                stdout=None,
-            )
-            if not self._agents:
-                self._simulation_end_ts = time.time() + self._exec_duration_sec + self._agent_start_delay
         async with asyncio.TaskGroup() as tg:
             self._task_group = tg
             if gui:
@@ -654,19 +880,25 @@ class Orchestrator:
             # if self._environment is not None:
             #     tg.create_task(self._read_logs())
             tg.create_task(self._simulation_end_timer())
+            for env in self._environments.values():
+                env.kwargs['exec_duration'] -= (time.time() - self._start_time)
+                tg.create_task(self._run_env(env, force_run=force_run))
+                # tg.create_task(self._read_logs(env, gui=False))
+                self._log_parser.add_container(env)
             for agent in self._agents.values():
                 tg.create_task(self._run_agent(agent, force_run=force_run))
-                tg.create_task(self._read_logs(agent, gui))
+                # tg.create_task(self._read_logs(agent, gui))
+                self._log_parser.add_container(agent)
+            tg.create_task(self._log_parser.run())
         self._running = False
         for agent in self._agents.values():
-            agent.container.remove()
-        if self._environment is not None:
-            print('Waiting for the environment process to stop gracefully...')
-            try:
-                self._environment.process.wait(20.)
-            except subprocess.TimeoutExpired:
-                print('Killing the environment process...')
-                self._environment.process.kill()
+            agent.container.stop()
+            if not keep_containers:
+                agent.container.remove()
+        for env in self._environments.values():
+            env.container.stop()
+            if not keep_containers:
+                env.container.remove()
         if self._mas_rmq_container is not None and self._mas_rmq_close_on_exit:
             try:
                 self._mas_rmq_container.stop()
@@ -680,7 +912,8 @@ class Orchestrator:
             gui: bool = False,
             rebuild_agents: bool = True,
             local_build: PathLike | None = None,
-            prerelease: bool = False
+            prerelease: bool = False,
+            keep_containers: bool = False
             ) -> None:
         """Run all the agents.
 
@@ -696,6 +929,8 @@ class Orchestrator:
                 one from PyPI) to be used for building agents.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
                 version of mhagenta while building the container.
+            keep_containers (bool, optional, default=False): Whether to keep or remove the agent and environment
+                containers after the execution.
 
         Raises:
             NameError: Raised if a container for one of the specified agent IDs already exists and `force_run` is False.
@@ -707,11 +942,12 @@ class Orchestrator:
             gui=gui,
             rebuild_agents=rebuild_agents,
             local_build=local_build,
-            prerelease=prerelease
+            prerelease=prerelease,
+            keep_containers=keep_containers
         ))
 
     @staticmethod
-    def _agent_stopped(agent: AgentEntry) -> bool:
+    def _agent_stopped(agent: AgentEntry | EnvironmentEntry) -> bool:
         agent.container.reload()
         return agent.container.status == 'exited'
 
@@ -722,43 +958,15 @@ class Orchestrator:
         for agent in self._agents.values():
             if not self._agent_stopped(agent):
                 return False
+        for env in self._environments.values():
+            if not self._agent_stopped(env):
+                return False
         self._all_stopped = True
         return True
 
     async def _simulation_end_timer(self) -> None:
         await asyncio.sleep(self._simulation_end_ts - time.time())
         self._stopping = True
-
-    def _add_log(self, log: str | bytes, gui: bool = False, file_stream: TextIOWrapper | None = None) -> None:
-        if isinstance(log, bytes):
-            log = log.decode().strip('\n\r')
-        print(log)
-        if gui:
-            self._monitor.add_log(log)
-        if file_stream is not None:
-            file_stream.write(f'{log}\n')
-            file_stream.flush()
-
-    async def _read_logs(self, agent: AgentEntry, gui: bool = False) -> None:
-        logs = self._docker_client.containers.get(agent.container.id).logs(stdout=True, stderr=True, stream=True, follow=True)
-        if gui:
-            module_ids = agent.module_ids
-            module_ids.insert(0, 'root')
-            self._monitor.add_agent(agent.agent_id, module_ids)
-
-        if self._save_logs:
-            f = open(self._save_dir / f'{agent.agent_id}.log', 'w')
-        else:
-            f = None
-        while True:
-            if self._stopping and self._agents_stopped:
-                if f is not None:
-                    f.close()
-                break
-            for line in logs:
-                self._add_log(line, gui=gui, file_stream=f)
-                await asyncio.sleep(0)
-            await asyncio.sleep(self.LOG_CHECK_FREQ)
 
     def __getitem__(self, agent_id: str) -> AgentEntry:
         return self._agents[agent_id]
@@ -785,5 +993,3 @@ class Orchestrator:
                 remove=True,
                 tty=True
             )
-
-
