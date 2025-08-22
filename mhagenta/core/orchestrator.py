@@ -719,7 +719,7 @@ class Orchestrator:
                 img.remove(force=True)
             except IndexError:
                 pass
-        print(f'===== BUILDING AGENT IMAGE: mhagent-env:{environment.env_id} =====')
+        print(f'===== BUILDING ENVIRONMENT IMAGE: mhagent-env:{environment.env_id} =====')
         env_dir = self._save_dir.resolve() / environment.env_id
         if self._force_run and env_dir.exists():
             shutil.rmtree(env_dir)

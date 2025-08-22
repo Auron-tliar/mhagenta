@@ -150,6 +150,13 @@ class ModuleBase:
         self._state_setter(state)
 
     def log(self, level: int, message: str) -> None:
+        """
+        Log a message via the agent internal logging system
+
+        Args:
+            level (int): log level
+            message (str): log message
+        """
         self._log_func(level, message)
 
 

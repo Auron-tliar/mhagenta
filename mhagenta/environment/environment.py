@@ -2,7 +2,7 @@ import asyncio
 import logging
 from os import PathLike
 from types import FrameType
-from typing import Iterable, Any, Literal
+from typing import Iterable, Any, Literal, Callable
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -20,6 +20,7 @@ class MHAEnvBase:
     """
     def __init__(self, init_state: dict[str, Any] | None) -> None:
         self.state = init_state if init_state is not None else {}
+        self._log_func: Callable[[int, str], None] | None = None
 
     def on_observe(self, state: dict[str, Any], sender_id: str, **kwargs) -> tuple[dict[str, Any], dict[str, Any]]:
         """
@@ -52,6 +53,16 @@ class MHAEnvBase:
 
         """
         return state
+
+    def log(self, level: int, message: str) -> None:
+        """
+        Log a message via the agent internal logging system
+
+        Args:
+            level (int): log level
+            message (str): log message
+        """
+        self._log_func(level, message)
 
 
 class MHAEnvironment(MHABase, ABC):
@@ -93,6 +104,7 @@ class MHAEnvironment(MHABase, ABC):
         self._exec_duration = exec_duration
 
         self.base = base
+        self.base._log_func = self.log
         self.state = base.state
 
         self._main_task_group: asyncio.TaskGroup | None = None
