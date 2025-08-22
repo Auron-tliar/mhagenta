@@ -129,7 +129,7 @@ class LogParser:
         def __eq__(self, other: 'LogParser.LogEntry') -> bool:
             return self.ts == other.ts
 
-    def __init__(self, stop_checker: Callable[[], bool], check_freq: float = 1., save_logs: PathLike | None = None) -> None:
+    def __init__(self, stop_checker: Callable[[], bool], check_freq: float = 1., save_logs: PathLike | str | None = None) -> None:
         # self._containers: list[AgentEntry | EnvironmentEntry] = list()
         self._sources: dict[AgentEntry | EnvironmentEntry, LogParser.SourceInfo] = dict()
         self._check_freq: float = check_freq
@@ -345,8 +345,8 @@ class Orchestrator:
                         port: int | None = 5672,
                         exec_duration: float | None = None,
                         exchange_name: str | None = None,
-                        init_script: PathLike | None = None,
-                        requirements_path: PathLike | None = None,
+                        init_script: PathLike | str | None = None,
+                        requirements_path: PathLike | str | None = None,
                         port_mapping: dict[int, int] | None = None,
                         log_tags: list[str] | None = None,
                         log_level: int | str | None = None,
@@ -365,9 +365,9 @@ class Orchestrator:
                 configuration if None. Defaults to None.
             exchange_name (str, optional): Name of RabbitMQ exchange for inter-agent communication. Will use the default
                 one for MAS if None. Defaults to None.
-            init_script (PathLike, optional): Path to an optional bash script to be run before launching the environment.
+            init_script (PathLike | str, optional): Path to an optional bash script to be run before launching the environment.
                 Use it to install additional non-Python dependencies. Defaults to None.
-            requirements_path (PathLike, optional): Path to Python dependencies file. Defaults to None.
+            requirements_path (PathLike | str, optional): Path to Python dependencies file. Defaults to None.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
                 Defaults to the Orchestrator's `port_mapping`.
             log_tags (list[str], optional): List of tags to add to log messages. Defaults to None.
@@ -443,8 +443,8 @@ class Orchestrator:
                   start_delay: float = 0.,
                   exec_duration: float | None = None,
                   resume: bool | None = None,
-                  init_script: PathLike | None = None,
-                  requirements_path: PathLike | None = None,
+                  init_script: PathLike | str | None = None,
+                  requirements_path: PathLike | str | None = None,
                   log_level: int | None = None,
                   port_mapping: dict[int, int] | None = None,
                   connector_cls: type[Connector] | None = None,
@@ -486,9 +486,9 @@ class Orchestrator:
                 this time. Defaults to the Orchestrator's `exec_duration`.
             resume (bool, optional): Specifies whether to use save module states when restarting an agent with
                 preexisting ID. Defaults to the Orchestrator's `resume`.
-            init_script (PathLike, optional): Path to an optional bash script to be run before launching the agent.
+            init_script (PathLike | str, optional): Path to an optional bash script to be run before launching the agent.
                 Use it to install additional non-Python dependencies. Defaults to None.
-            requirements_path (PathLike, optional): Additional Python requirements to install on agent side.
+            requirements_path (PathLike | str, optional): Additional Python requirements to install on agent side.
             log_level (int, optional):  Logging level for the agent. Defaults to the Orchestrator's `log_level`.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
                 Defaults to the Orchestrator's `port_mapping`.
@@ -587,7 +587,7 @@ class Orchestrator:
 
     def _docker_build_base(self,
                            mhagenta_version: str = 'latest',
-                           local_build: PathLike | None = None,
+                           local_build: PathLike | str | None = None,
                            prerelease: bool = False
                            ) -> None:
         if not mhagenta_version:
@@ -830,7 +830,7 @@ class Orchestrator:
                    force_run: bool = False,
                    gui: bool = False,
                    rebuild_agents: bool = True,
-                   local_build: PathLike | None = None,
+                   local_build: PathLike | str | None = None,
                    prerelease: bool = False,
                    keep_containers: bool = False
                    ) -> None:
@@ -844,7 +844,7 @@ class Orchestrator:
             gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
                 orchestrator.
             rebuild_agents (bool, optional, default=True): Whether to rebuild the agents. Defaults to True.
-            local_build (PathLike, optional): Specifies the path to a local build of MHAgentA (as opposed to the latest
+            local_build (PathLike | str, optional): Specifies the path to a local build of MHAgentA (as opposed to the latest
                 one from PyPI) to be used for building agents.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
                 version of mhagenta while building the container.
@@ -911,7 +911,7 @@ class Orchestrator:
             force_run: bool = False,
             gui: bool = False,
             rebuild_agents: bool = True,
-            local_build: PathLike | None = None,
+            local_build: PathLike | str | None = None,
             prerelease: bool = False,
             keep_containers: bool = False
             ) -> None:
@@ -925,7 +925,7 @@ class Orchestrator:
             gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
                 orchestrator.
             rebuild_agents (bool, optional, default=True): Whether to rebuild the agents. Defaults to True.
-            local_build (PathLike, optional): Specifies the path to a local build of MHAgentA (as opposed to the latest
+            local_build (PathLike | str, optional): Specifies the path to a local build of MHAgentA (as opposed to the latest
                 one from PyPI) to be used for building agents.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
                 version of mhagenta while building the container.
