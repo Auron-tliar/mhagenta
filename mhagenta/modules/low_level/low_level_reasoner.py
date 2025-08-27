@@ -191,13 +191,12 @@ class LLReasoner(MHAModule):
             out_id_channels.append(self.sender_reg_entry(actuator.module_id, ConnType.request))
             in_id_channels_callbacks.append(self.recipient_reg_entry(actuator.module_id, ConnType.send, self._receive_action_status))
 
-        if self._directory.internal.hl_reasoning:
-            for knowledge in self._directory.internal.knowledge:
-                out_id_channels.append(self.sender_reg_entry(knowledge.module_id, ConnType.send))
-            for goal_graph in self._directory.internal.goals:
-                out_id_channels.append(self.sender_reg_entry(goal_graph.module_id, ConnType.request))
-                out_id_channels.append(self.sender_reg_entry(goal_graph.module_id, ConnType.send))
-                in_id_channels_callbacks.append(self.recipient_reg_entry(goal_graph.module_id, ConnType.send, self._receive_goals))
+        for knowledge in self._directory.internal.knowledge:
+            out_id_channels.append(self.sender_reg_entry(knowledge.module_id, ConnType.send))
+        for goal_graph in self._directory.internal.goals:
+            out_id_channels.append(self.sender_reg_entry(goal_graph.module_id, ConnType.request))
+            out_id_channels.append(self.sender_reg_entry(goal_graph.module_id, ConnType.send))
+            in_id_channels_callbacks.append(self.recipient_reg_entry(goal_graph.module_id, ConnType.send, self._receive_goals))
 
         for learner in self._directory.internal.learning:
             out_id_channels.append(self.sender_reg_entry(learner.module_id, ConnType.request))
