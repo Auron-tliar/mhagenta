@@ -770,8 +770,7 @@ class Orchestrator:
                                                            },
                                                            tag=f'mhagent-env:{environment.env_id}',
                                                            rm=True,
-                                                           quiet=False,
-                                                           nocache=True
+                                                           quiet=False
                                                            )
         shutil.rmtree(build_dir)
 
