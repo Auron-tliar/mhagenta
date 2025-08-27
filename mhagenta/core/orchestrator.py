@@ -672,13 +672,18 @@ class Orchestrator:
                             agent: AgentEntry,
                             rebuild_image: bool = True,
                             ) -> None:
-        if rebuild_image:
-            try:
-                img = self._docker_client.images.list(name=f'mhagent:{agent.agent_id}')[0]
+        try:
+            img = self._docker_client.images.list(name=f'mhagent:{agent.agent_id}')[0]
+            if rebuild_image:
                 img.remove(force=True)
-            except IndexError:
-                pass
-        print(f'===== BUILDING AGENT IMAGE: mhagent:{agent.agent_id} =====')
+            else:
+                agent.image = img
+                print(f'===== AGENT IMAGE FOUND: mhagent:{agent.agent_id} (NO REBUILD REQUESTED) =====')
+                return
+        except IndexError:
+            if not rebuild_image:
+                raise ValueError(f'Image {f'mhagent:{agent.agent_id}'} is not found!')
+        print(f'===== BUILDING AGENT IMAGE: mhagent:{agent.agent_id} FROM {self._base_image.tags[0]} =====')
         agent_dir = self._save_dir.resolve() / agent.agent_id
         if self._force_run and agent_dir.exists():
             shutil.rmtree(agent_dir)
@@ -731,13 +736,18 @@ class Orchestrator:
                           environment: EnvironmentEntry,
                           rebuild_image: bool = True,
                             ) -> None:
-        if rebuild_image:
-            try:
-                img = self._docker_client.images.list(name=f'mhagent-env:{environment.env_id}')[0]
+        try:
+            img = self._docker_client.images.list(name=f'mhagent-env:{environment.env_id}')[0]
+            if rebuild_image:
                 img.remove(force=True)
-            except IndexError:
-                pass
-        print(f'===== BUILDING ENVIRONMENT IMAGE: mhagent-env:{environment.env_id} =====')
+            else:
+                environment.image = img
+                print(f'===== ENVIRONMENT IMAGE FOUND: mhagent:{environment.env_id} (NO REBUILD REQUESTED) =====')
+                return
+        except IndexError:
+            if not rebuild_image:
+                raise ValueError(f'Image {f'mhagent:{environment.env_id}'} is not found!')
+        print(f'===== BUILDING ENVIRONMENT IMAGE: mhagent-env:{environment.env_id} FROM {self._base_image.tags[0]} =====')
         env_dir = self._save_dir.resolve() / environment.env_id
         if self._force_run and env_dir.exists():
             shutil.rmtree(env_dir)
@@ -848,6 +858,7 @@ class Orchestrator:
                    force_run: bool = False,
                    gui: bool = False,
                    rebuild_agents: bool = True,
+                   rebuild_envs: bool = True,
                    local_build: PathLike | str | None = None,
                    prerelease: bool = False,
                    keep_containers: bool = False
@@ -861,7 +872,8 @@ class Orchestrator:
                 raised.
             gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
                 orchestrator.
-            rebuild_agents (bool, optional, default=True): Whether to rebuild the agents. Defaults to True.
+            rebuild_agents (bool, optional, default=True): Whether to rebuild the agent containers. Defaults to True.
+            rebuild_envs (bool, optional, default=True): Whether to rebuild the environment containers. Defaults to True.
             local_build (PathLike | str, optional): Specifies the path to a local build of MHAgentA (as opposed to the latest
                 one from PyPI) to be used for building agents.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
@@ -880,7 +892,7 @@ class Orchestrator:
 
         self._force_run = force_run
         for env in self._environments.values():
-            self._docker_build_env(env, rebuild_image=rebuild_agents)
+            self._docker_build_env(env, rebuild_image=rebuild_envs)
         for agent in self._agents.values():
             self._docker_build_agent(agent, rebuild_image=rebuild_agents)
 
@@ -929,6 +941,7 @@ class Orchestrator:
             force_run: bool = False,
             gui: bool = False,
             rebuild_agents: bool = True,
+            rebuild_envs: bool = True,
             local_build: PathLike | str | None = None,
             prerelease: bool = False,
             keep_containers: bool = False
@@ -943,6 +956,7 @@ class Orchestrator:
             gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
                 orchestrator.
             rebuild_agents (bool, optional, default=True): Whether to rebuild the agents. Defaults to True.
+            rebuild_envs (bool, optional, default=True): Whether to rebuild the environment containers. Defaults to True.
             local_build (PathLike | str, optional): Specifies the path to a local build of MHAgentA (as opposed to the latest
                 one from PyPI) to be used for building agents.
             prerelease (bool, optional, default=False): Specifies whether to allow agents to use the latest prerelease
@@ -959,6 +973,7 @@ class Orchestrator:
             force_run=force_run,
             gui=gui,
             rebuild_agents=rebuild_agents,
+            rebuild_envs=rebuild_envs,
             local_build=local_build,
             prerelease=prerelease,
             keep_containers=keep_containers
