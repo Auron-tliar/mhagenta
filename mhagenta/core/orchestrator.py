@@ -650,6 +650,24 @@ class Orchestrator:
                     raise ex
                 shutil.rmtree(build_dir)
 
+    def _logged_build(self, *args, **kwargs) -> Any:
+        try:
+            results = self._docker_client.images.build(*args, **kwargs)
+            return results
+        except docker.errors.BuildError as e:
+            print('Build error encountered!')
+            for log in e.build_log:
+                if 'stream' in log:
+                    msg = log['stream'].strip()
+                    if msg:
+                        print(f'[stream] {msg}')
+                elif 'error' in log:
+                    print(f'[error ] {log['error']}')
+                    if 'errorDetail' in log:
+                        for d_key, d_val in log['errorDetail'].items():
+                            print(f'\t[{d_key}] {d_val}')
+            raise e
+
     def _docker_build_agent(self,
                             agent: AgentEntry,
                             rebuild_image: bool = True,
@@ -698,15 +716,15 @@ class Orchestrator:
             dill.dump(agent.kwargs, f, recurse=True)
 
         base_tag = self._base_image.tags[0].split(':')
-        agent.image, _ = self._docker_client.images.build(path=str(build_dir.resolve()),
-                                                          buildargs={
-                                                              'SRC_IMAGE': base_tag[0],
-                                                              'SRC_VERSION': base_tag[1]
-                                                          },
-                                                          tag=f'mhagent:{agent.agent_id}',
-                                                          rm=True,
-                                                          quiet=False
-                                                          )
+        agent.image, _ = self._logged_build(path=str(build_dir.resolve()),
+                                            buildargs={
+                                                'SRC_IMAGE': base_tag[0],
+                                                'SRC_VERSION': base_tag[1]
+                                            },
+                                            tag=f'mhagent:{agent.agent_id}',
+                                            rm=True,
+                                            quiet=False
+                                            )
         shutil.rmtree(build_dir)
 
     def _docker_build_env(self,
@@ -745,15 +763,16 @@ class Orchestrator:
             dill.dump(environment.kwargs, f, recurse=True)
 
         base_tag = self._base_image.tags[0].split(':')
-        environment.image, _ = self._docker_client.images.build(path=str(build_dir.resolve()),
-                                                                buildargs={
-                                                                    'SRC_IMAGE': base_tag[0],
-                                                                    'SRC_VERSION': base_tag[1]
-                                                                },
-                                                                tag=f'mhagent-env:{environment.env_id}',
-                                                                rm=True,
-                                                                quiet=False
-                                                                )
+        environment.image, build_logs = self._logged_build(path=str(build_dir.resolve()),
+                                                           buildargs={
+                                                               'SRC_IMAGE': base_tag[0],
+                                                               'SRC_VERSION': base_tag[1]
+                                                           },
+                                                           tag=f'mhagent-env:{environment.env_id}',
+                                                           rm=True,
+                                                           quiet=False,
+                                                           nocache=True
+                                                           )
         shutil.rmtree(build_dir)
 
     async def _run_agent(self,
