@@ -42,3 +42,6 @@ apt-get install -y erlang-base \
 
 ## Install rabbitmq-server and its dependencies
 apt-get install rabbitmq-server -y --fix-missing
+
+# Clear apt cache
+apt-get clean

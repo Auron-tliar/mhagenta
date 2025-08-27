@@ -18,4 +18,5 @@ RUN if [ "$PRE_VERSION" = "true" ] ; then \
         fi ; \
     fi
 
+RUN pip cache purge
 RUN pip show mhagenta
