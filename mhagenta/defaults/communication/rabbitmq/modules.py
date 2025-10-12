@@ -221,24 +221,24 @@ class RMQPerceptorBase(PerceptorBase):
         Override to define reaction to an observation (e.g. forward it to a low-level reasoner).
 
         Args:
-            state (PerceptorState): perceptor state.
+            state (PerceptorState): current perceptor state.
             env_id (str): environment id.
             **kwargs:
 
         Returns:
-
+            PerceptorState: updated perceptor state.
         """
         return state
 
     def _on_observation_task(self, sender: str, msg: Message) -> None:
         try:
-            self.log(logging.DEBUG, f'Received observation {msg.short_id} from the environment.')
+            self.log(logging.DEBUG, f'Received observation {msg.short_id} from the environment {sender}.')
             update = self.on_observation(self.state, env_id=sender, **msg.body)
             self._owner._process_update(update)
         except Exception as ex:
             self._owner.warning(
                 f'Caught exception \"{ex}\" while processing observation {msg.short_id}!'
-                f' Aborting processing and attempting to resume execution...')
+                ' Aborting processing and attempting to resume execution...')
             raise ex
 
     def _on_observation_callback(self, sender: str, channel: str, msg: Message):
@@ -278,6 +278,9 @@ class RMQActuatorBase(ActuatorBase):
             external_exchange_name=self.conn_params['exchange_name'],
         )
         await self._connector.initialize()
+        await self._connector.subscribe_to_in_channel(
+            !!!
+        )
         await self._connector.register_out_channel(
             recipient='',
             channel=''
@@ -303,4 +306,38 @@ class RMQActuatorBase(ActuatorBase):
                 ts=self._owner.time.agent,
                 performative=Performatives.ACT
             )
+        )
+
+    def on_status(self, state: ActuatorState, env_id: str, **kwargs) -> ActuatorState:
+        """
+        Override to define reaction to an action status (e.g. forward it to a low-level reasoner).
+
+        Args:
+            state (ActuatorState): current actuator state.
+            env_id (str): environment id.
+            **kwargs:
+
+        Returns:
+            ActuatorState: updated actuator state.
+        """
+        return state
+
+    def _on_status_task(self, sender: str, msg: Message) -> None:
+        try:
+            self.log(logging.DEBUG, f'Received action status {msg.short_id} from the environment {sender}.')
+            update = self.on_status(self.state, env_id=sender, **msg.body)
+            self._owner._process_update(update)
+        except Exception as ex:
+            self._owner.warning(
+                f'Caught exception \"{ex}\" while processing action status {msg.short_id}!'
+                ' Aborting processing and attempting to resume execution...')
+            raise ex
+
+    def _on_status_callback(self, sender: str, channel: str, msg: Message) -> None:
+        self._owner._queue.push(
+            func=self._on_status_task,
+            ts=self._owner.time.agent,
+            priority=False,
+            sender=sender,
+            msg=msg
         )
