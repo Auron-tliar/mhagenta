@@ -279,7 +279,9 @@ class RMQActuatorBase(ActuatorBase):
         )
         await self._connector.initialize()
         await self._connector.subscribe_to_in_channel(
-            !!!
+            sender='',
+            channel=self._agent_id,
+            callback=self._on_status_callback
         )
         await self._connector.register_out_channel(
             recipient='',
