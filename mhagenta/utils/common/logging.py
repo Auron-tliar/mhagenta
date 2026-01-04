@@ -14,6 +14,9 @@ class LoggerExtras(BaseModel):
 
 
 class ILogging(ABC):
+    """
+    Abstract interface class outlining the logging mechanism.
+    """
     @property
     @abstractmethod
     def _logger_extras(self) -> LoggerExtras | None:
@@ -24,20 +27,20 @@ class ILogging(ABC):
     def _logger(self) -> logging.Logger:
         pass
 
-    def log(self, level: int, message: str):
+    def log(self, level: int, message: str) -> None:
         self._logger.log(level, message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())
 
-    def debug(self, message: str):
+    def debug(self, message: str) -> None:
         self._logger.debug(message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())
 
-    def info(self, message: str):
+    def info(self, message: str) -> None:
         self._logger.info(message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())
 
-    def warning(self, message: str):
+    def warning(self, message: str) -> None:
         self._logger.warning(message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())
 
-    def error(self, message: str):
+    def error(self, message: str) -> None:
         self._logger.error(message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())
 
-    def critical(self, message: str):
+    def critical(self, message: str) -> None:
         self._logger.critical(message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())

@@ -6,25 +6,18 @@ import sys
 import time
 from asyncio import TaskGroup
 from dataclasses import dataclass
-from io import TextIOWrapper
 from os import PathLike
 from datetime import datetime, timedelta
-import socket
 from pathlib import Path
-from typing import Any, Iterable, Literal, Self, Callable
-import subprocess
-import signal
+from typing import Any, Iterable, Literal, Callable
 import functools
 import dateutil.parser
 import dateutil.tz
-from pprint import pprint
 
 import dill
 import docker
 import pika
-# from Demos.c_extension.setup import sources
 from pika.adapters import BlockingConnection
-from pika.channel import Channel
 from pika.exceptions import AMQPConnectionError
 from docker.errors import NotFound
 from docker.models.containers import Container
@@ -37,7 +30,6 @@ from mhagenta.core.connection import Connector, RabbitMQConnector
 from mhagenta.utils import DEFAULT_PORT, DEFAULT_RMQ_IMAGE
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT, Directory
 from mhagenta.environment import MHAEnvBase
-# from mhagenta.utils.common.classes import EDirectory
 from mhagenta.gui import Monitor
 from mhagenta.utils.common.classes import EDirectory
 
@@ -207,7 +199,6 @@ class Orchestrator:
                  log_level: int = logging.INFO,
                  log_format: str | None = None,
                  status_msg_format: str = '[status_upd]::{}',
-                 module_start_delay: float = 2.,
                  connector_cls: type[Connector] = RabbitMQConnector,
                  connector_kwargs: dict[str, Any] | None = None,
                  mas_rmq_uri: str | Literal['default'] | None = None,
@@ -289,7 +280,6 @@ class Orchestrator:
         self._step_frequency = step_frequency
         self._status_frequency = status_frequency
         self._control_frequency = control_frequency
-        self._module_start_delay = module_start_delay
         self._exec_start_time = exec_start_time
         self._exec_duration_sec = exec_duration
         self._agent_start_delay = agent_start_delay
@@ -1021,7 +1011,7 @@ class Orchestrator:
                 name='mhagenta-rmq',
                 ports={
                     '5672': 5672,
-                    '15672':15672
+                    '15672': 15672
                 },
                 remove=True,
                 tty=True

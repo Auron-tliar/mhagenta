@@ -1,0 +1,11 @@
+site_name: mhagenta
+theme:
+  name: material
+
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google

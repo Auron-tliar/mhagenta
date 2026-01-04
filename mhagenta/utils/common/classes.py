@@ -29,6 +29,9 @@ class ModuleTypes:
 
 
 class MHABase(ILogging, ABC):
+    """
+    Universal base class that ties up the centralized logging functionality with agent ID and tag chains.
+    """
     def __init__(self,
                  agent_id: str,
                  log_id: str | None = None,
@@ -171,6 +174,9 @@ class AgentTime:
 
 
 class TagCard[T](ABC):
+    """
+    Abstract base class for directory tag-based entries.
+    """
     def __init__(self, tags: Iterable[T]) -> None:
         self.tags: set[T] = set(tags)
 
@@ -196,8 +202,10 @@ class TagCard[T](ABC):
         return str(self)
 
 
-
 class ICard(TagCard[str]):
+    """
+    Directory entry class for the internal directory.
+    """
     def __init__(self, module_id: str, module_type: str, tags: Iterable[str] | None = None) -> None:
         self.module_id = module_id
         self.module_type = module_type
@@ -212,6 +220,13 @@ class ICard(TagCard[str]):
 
 
 class ECard(TagCard[str]):
+    """
+    Directory entry class for the external directory.
+
+    Args:
+        agent_id (str): unique ID of the corresponding entity. Currently, can also be an environment ID.
+        address (dict[str, Any]): Any information necessary for contacting the corresponding entity.
+    """
     def __init__(self, agent_id: str, address: dict[str, Any], tags: Iterable[str] | None = None) -> None:
         self.agent_id = agent_id
         self.address = address
@@ -226,6 +241,9 @@ class ECard(TagCard[str]):
 
 
 class BaseDirectory:
+    """
+    Base class for all directory types. Provides access by key and search by tag functionalities.
+    """
     def __init__(self, content: Iterable[TagCard[str]] | None = None) -> None:
         self._content = list(content) if content is not None else list()
         self._by_id = {card.id: card for card in content} if content is not None else dict()
@@ -373,6 +391,9 @@ class IDirectory(BaseDirectory):
 
 
 class EDirectory(BaseDirectory):
+    """
+    Directory of all the external entities Orchestrator was aware of during the launch.
+    """
     ENVIRONMENT = 'environment'
     localhost_win = 'host.docker.internal'
     localhost_linux = 'http://172.17.0.1'
@@ -427,6 +448,9 @@ class EDirectory(BaseDirectory):
 
 
 class Directory:
+    """
+    A simple container for a pair of internal and external directories.
+    """
     def __init__(self) -> None:
                  # env_address: Any | None = None,
                  # env_tags: Iterable[str] | None = None):
@@ -508,12 +532,18 @@ class ActionStatus:
 
 
 class ConnType:
+    """
+    Enum-like class for connection types.
+    """
     send = 'send'
     request = 'request'
 
 
 @dataclass
 class AgentCmd:
+    """
+    Dataclass for agent commands.
+    """
     START: ClassVar[str] = 'start'
     STOP: ClassVar[str] = 'stop'
 
@@ -529,6 +559,9 @@ class AgentCmd:
 
 @dataclass
 class StatusReport:
+    """
+    Dataclass for module's status reports.
+    """
     CREATED: ClassVar[str] = 'CREATED'
     READY: ClassVar[str] = 'READY'
     RUNNING: ClassVar[str] = 'RUNNING'
@@ -553,6 +586,9 @@ class StatusReport:
 
 @dataclass
 class Performatives:
+    """
+    Dataclass for performative options.
+    """
     INFORM: ClassVar[str] = 'inform'
 
     AGREE: ClassVar[str] = 'agree'
@@ -572,7 +608,9 @@ class Performatives:
 
 @dataclass
 class Message:
-
+    """
+    Dataclass for message information.
+    """
     body: Any | dict[str, Any]
     sender_id: str
     recipient_id: str
@@ -615,6 +653,9 @@ class Message:
 
 
 class Outbox(ABC):
+    """
+    Abstract base class for module outboxes.
+    """
     def __init__(self) -> None:
         self._msgs: dict[tuple[str, str, str | None], list[Any | dict[str, Any]]] = dict()
 
