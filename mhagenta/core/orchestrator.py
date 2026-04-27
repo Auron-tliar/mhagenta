@@ -561,7 +561,6 @@ class Orchestrator:
                 tags=env.kwargs['tags']
             )
 
-
         for agent in self._agents.values():
             directory.external.add_agent(
                 agent_id=agent.agent_id,
@@ -725,7 +724,7 @@ class Orchestrator:
     def _docker_build_env(self,
                           environment: EnvironmentEntry,
                           rebuild_image: bool = True,
-                            ) -> None:
+                          ) -> None:
         try:
             img = self._docker_client.images.list(name=f'mhagent-env:{environment.env_id}')[0]
             if rebuild_image:
@@ -814,9 +813,9 @@ class Orchestrator:
             )
 
     async def _run_env(self,
-                         environment: EnvironmentEntry,
-                         force_run: bool = False
-                         ) -> None:
+                       environment: EnvironmentEntry,
+                       force_run: bool = False
+                       ) -> None:
         print(f'===== RUNNING ENVIRONMENT IMAGE \"mhagent-env:{environment.env_id}\" AS CONTAINER \"{environment.env_id}\" =====')
 
         env_dir = (environment.dir / "out").resolve()

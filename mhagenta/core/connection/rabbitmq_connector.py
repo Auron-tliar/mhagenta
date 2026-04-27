@@ -160,11 +160,11 @@ class RabbitMQAsyncioConsumer(MHABase):
 
     async def _wait_for_initialization(self) -> None:
         while not self._started:
-            await asyncio.sleep(1.)
+            await asyncio.sleep(0.5)
 
     async def _wait_for_stop(self) -> None:
         while not self._stopped and self._consuming:
-            await asyncio.sleep(1.)
+            await asyncio.sleep(0.5)
 
     async def start(self) -> None:
         await self.initialize()
@@ -262,7 +262,7 @@ class RabbitMQAsyncioPublisher(MHABase):
 
     async def _wait_for_initialization(self) -> None:
         while not self._started:
-            await asyncio.sleep(1.)
+            await asyncio.sleep(0.5)
 
     async def start(self) -> None:
         await self.initialize()
@@ -524,7 +524,7 @@ class RabbitMQConnector(Connector):
 
     async def _wait_for_channel_open(self) -> None:
         while not self._started:
-            await asyncio.sleep(1.)
+            await asyncio.sleep(0.5)
 
     def _on_channel_open(self, channel: Channel) -> None:
         self.log(logging.DEBUG, 'Channel opened')
