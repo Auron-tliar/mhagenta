@@ -195,7 +195,7 @@ class MHAModule(MHAProcess):
             time_func=self._time.get_exec_time,
             directory=global_params.directory,
             outbox=outbox_cls(),
-            agent_time=self._time,
+            # agent_time=self._time,
             **self._base.initial_state)
         self._base._state_getter = lambda: self._state
         self._base._state_setter = self._process_update
