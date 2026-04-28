@@ -2,7 +2,9 @@
 
 rabbitmq-server -detached
 
-rabbitmqctl await_startup
+until rabbitmq-diagnostics -q check_running; do
+  sleep 0.5
+done
 
 python /agent/agent_launcher.py
 

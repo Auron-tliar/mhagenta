@@ -8,7 +8,7 @@ RUN mkdir -p /out/logs
 RUN mkdir -p /out/save
 RUN if [ -e /agent/init_script.sh ] ; then sh /agent/init_script.sh ; fi
 
-RUN pip install -r "/agent/requirements.txt"
+RUN if [ -e /agent/requirements.txt ] ; then pip install -r "/agent/requirements.txt" ; fi
 
 ENTRYPOINT ["sh"]
 CMD ["/agent/start.sh"]
