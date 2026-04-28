@@ -44,7 +44,6 @@ class AgentEntry:
     container: Container | None = None
     port_mapping: dict[int, int] | None = None
     num_copies: int = 1
-    save_logs: bool = True
     tags: Iterable[str] | None = None
 
     @property
@@ -322,7 +321,7 @@ class Orchestrator:
         self._log_parser = LogParser(
             stop_checker=lambda: self._stopping and self._agents_stopped,
             check_freq=1.,
-            save_logs=self._save_dir
+            save_logs=self._save_dir if save_logs else None
         )
 
     def _docker_init(self) -> None:
@@ -439,7 +438,6 @@ class Orchestrator:
                   port_mapping: dict[int, int] | None = None,
                   connector_cls: type[Connector] | None = None,
                   connector_kwargs: dict[str, Any] | None = None,
-                  save_logs: bool | None = None,
                   tags: Iterable[str] | None = None
                   ) -> None:
         """Define an agent model to be added to the execution.
@@ -486,8 +484,6 @@ class Orchestrator:
                 modules. Defaults to the Orchestrator's `connector_cls`.
             connector_kwargs (dict[str, Any], optional): Additional keyword arguments for connector. Defaults to
                 the Orchestrator's `connector_kwargs`.
-            save_logs (bool, optional): Whether to save agent logs. If True, saves the agent's logs to
-                `<agent_id>.log` at the root of the `save_dir`. Defaults to the orchestrator's `save_logs`.
             tags (Iterable[str], optional): a list of tags associated with this agent for directory search.
 
         """
@@ -539,7 +535,6 @@ class Orchestrator:
             port_mapping=port_mapping if port_mapping else self._port_mapping,
             num_copies=num_copies,
             kwargs=kwargs,
-            save_logs=save_logs if save_logs is not None else self._save_logs,
             tags=tags
         )
         if self._task_group is not None:
@@ -724,7 +719,7 @@ class Orchestrator:
     def _docker_build_env(self,
                           environment: EnvironmentEntry,
                           rebuild_image: bool = True,
-                          ) -> None:
+                    ) -> None:
         try:
             img = self._docker_client.images.list(name=f'mhagent-env:{environment.env_id}')[0]
             if rebuild_image:
