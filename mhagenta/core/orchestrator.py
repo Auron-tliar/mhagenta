@@ -579,19 +579,6 @@ class Orchestrator:
                            ) -> None:
         if not mhagenta_version:
             mhagenta_version = CONTAINER_VERSION
-        try:
-            print(f'===== PULLING RABBITMQ BASE IMAGE: {REPO}:rmq =====')
-            self._docker_client.images.pull(REPO, tag='rmq')
-        except docker.errors.ImageNotFound:
-            print('Pulling failed...')
-            print(f'===== BUILDING RABBITMQ BASE IMAGE: {REPO}:rmq =====')
-            if self._rabbitmq_image is None:
-                self._rabbitmq_image, _ = (
-                    self._docker_client.images.build(path=RABBIT_IMG_PATH,
-                                                     tag=f'{REPO}:rmq',
-                                                     rm=True,
-                                                     quiet=False
-                                                     ))
 
         if self._base_image is None:
             print(f'===== LOOKING FOR AGENT BASE IMAGE: {REPO}:{mhagenta_version} =====')
@@ -609,6 +596,19 @@ class Orchestrator:
                         print('\tPULLING AGENT BASE IMAGE FAILED...')
                 build_dir = self._save_dir.resolve() / 'tmp' / 'mha-base'
                 try:
+                    try:
+                        print(f'===== PULLING RABBITMQ BASE IMAGE: {REPO}:rmq =====')
+                        self._docker_client.images.pull(REPO, tag='rmq')
+                    except docker.errors.ImageNotFound:
+                        print('Pulling failed...')
+                        print(f'===== BUILDING RABBITMQ BASE IMAGE: {REPO}:rmq =====')
+                        if self._rabbitmq_image is None:
+                            self._rabbitmq_image, _ = (
+                                self._docker_client.images.build(path=RABBIT_IMG_PATH,
+                                                                 tag=f'{REPO}:rmq',
+                                                                 rm=True,
+                                                                 quiet=False
+                                                                 ))
                     print(f'===== BUILDING AGENT BASE IMAGE: {REPO}:{mhagenta_version} =====')
                     shutil.copytree(BASE_IMG_PATH, build_dir, dirs_exist_ok=True)
                     if local_build is not None:
