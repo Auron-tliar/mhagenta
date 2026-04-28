@@ -294,7 +294,7 @@ class Orchestrator:
 
         self._mas_rmq_uri = mas_rmq_uri if mas_rmq_uri != 'default' else 'localhost:5672'
         self._mas_rmq_uri_internal = mas_rmq_uri if mas_rmq_uri != 'default' else 'localhost:5672'
-        if 'localhost' in self._mas_rmq_uri_internal:
+        if self._mas_rmq_uri_internal is not None and 'localhost' in self._mas_rmq_uri_internal:
             self._mas_rmq_uri_internal = self._mas_rmq_uri_internal.replace('localhost', EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win)
         self._mas_rmq_close_on_exit = mas_rmq_close_on_exit
         self._mas_rmq_container: Container | None = None
@@ -542,6 +542,9 @@ class Orchestrator:
 
     def _compose_directory(self) -> Directory:
         directory = Directory()
+        if self._mas_rmq_uri_internal is None:
+            return directory
+
         host, port = self._mas_rmq_uri_internal.split(':')
 
         for env in self._environments.values():
