@@ -144,6 +144,8 @@ class LogParser:
     def _add_log(log: str | bytes, save_path: Path | None = None) -> None:
         if isinstance(log, bytes):
             log = log.decode().strip('\n\r')
+        if '[status_upd]' in log:
+            return
         print(log)
         if save_path is not None:
             with open(save_path, 'a') as f:
