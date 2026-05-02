@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request
 from httpx import Client
 
 from mhagenta.bases import PerceptorBase, ActuatorBase
-from mhagenta.states import PerceptorState, ActuatorState
+from mhagenta.states import PerceptorState
 
 
 class RestReceiver(PerceptorBase):

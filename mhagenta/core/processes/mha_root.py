@@ -3,18 +3,17 @@ import logging
 import subprocess
 import sys
 import time
-from argparse import ArgumentError
 from pathlib import Path
 from typing import Any, Literal
 from collections.abc import Iterable
 
 import dill
 
-from mhagenta.utils import AgentCmd, StatusReport, Directory, ModuleTypes
+from mhagenta.utils import AgentCmd, StatusReport, Directory
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT
 from mhagenta.core.connection import RootMessenger, Connector
 from mhagenta.core.processes.process import MHAProcess
-from mhagenta.core.processes.mha_module import GlobalParams, ModuleBase
+from mhagenta.core.processes.mha_module import GlobalParams
 from mhagenta.bases import *
 
 
