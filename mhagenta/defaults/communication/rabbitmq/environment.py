@@ -1,7 +1,7 @@
-import asyncio
 import logging
-from os import PathLike
-from typing import Iterable, Literal
+import os
+from typing import Literal
+from collections.abc import Iterable
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT, Message
 from mhagenta.core import RabbitMQConnector
 from mhagenta.environment import MHAEnvironment, MHAEnvBase
@@ -20,7 +20,7 @@ class RMQEnvironment(MHAEnvironment):
                  exec_duration: float = 60.,
                  exchange_name: str = 'mhagenta',
                  start_time_reference: float | None = None,
-                 save_dir: PathLike | None = None,
+                 save_dir: os.PathLike | None = None,
                  save_format: Literal['json', 'dill'] = 'json',
                  log_id: str | None = None,
                  log_tags: list[str] | None = None,

@@ -1,11 +1,11 @@
-from typing import Callable, TypeAlias
+from collections.abc import Callable
 from mhagenta.utils.common import State, Message
 
 
-Sender: TypeAlias = str
-Recipient: TypeAlias = str
-Channel: TypeAlias = str
+type Sender = str
+type Recipient = str
+type Channel = str
 
-StepAction: TypeAlias = Callable[[State], State]
-MessageCallback: TypeAlias = Callable[[Sender, Channel, Message], State]
-MsgProcessorCallback: TypeAlias = Callable[[Sender, Channel, Message], None]
+type StepAction = Callable[[State], State]
+type MessageCallback = Callable[[Sender, Channel, Message], State]
+type MsgProcessorCallback = Callable[[Sender, Channel, Message], None]

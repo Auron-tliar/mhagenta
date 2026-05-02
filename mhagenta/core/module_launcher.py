@@ -2,7 +2,6 @@ import asyncio
 import os
 from pathlib import Path
 from sys import argv, exit
-from typing import *
 
 import dill
 from pydantic import BaseModel
@@ -16,8 +15,8 @@ from mhagenta.bases import *
 
 
 class ModuleSet(BaseModel):
-    module_cls: Type[MHAModule]
-    base: Type[ModuleBase]
+    module_cls: type[MHAModule]
+    base: type[ModuleBase]
 
 
 MODULE_NAME_TO_CLASS = {

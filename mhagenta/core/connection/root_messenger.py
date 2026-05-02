@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Iterable, Callable
+from collections.abc import Iterable, Callable
 
 from mhagenta.utils.common import MHABase, AgentTime, ModuleTypes, DEFAULT_LOG_FORMAT
 from mhagenta.core.connection.connector import Connector

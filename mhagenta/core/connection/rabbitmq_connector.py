@@ -2,7 +2,7 @@ import asyncio
 import functools
 import json
 import logging
-from typing import Iterable, Callable
+from collections.abc import Iterable, Callable
 
 import dill
 import pika

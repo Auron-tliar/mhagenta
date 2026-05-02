@@ -2,7 +2,8 @@ import json
 import logging
 from dataclasses import field
 from pathlib import Path
-from typing import Any, ClassVar, Iterable, Literal, Callable
+from typing import Any, ClassVar, Literal
+from collections.abc import Iterable, Callable
 
 import dill
 from pydantic import BaseModel, ConfigDict

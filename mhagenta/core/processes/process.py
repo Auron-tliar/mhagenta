@@ -8,7 +8,8 @@ from abc import ABC
 from enum import Enum
 from functools import total_ordering
 from types import NoneType
-from typing import Callable, Any, Self
+from typing import Any, Self
+from collections.abc import Callable
 
 from mhagenta.utils.common.classes import MHABase, AgentTime
 from mhagenta.utils.common import DEFAULT_LOG_FORMAT, LoggerExtras
@@ -244,9 +245,12 @@ class MHAProcess(MHABase, ABC):
                  log_level: int | str = logging.DEBUG,
                  log_format: str = DEFAULT_LOG_FORMAT
                  ) -> None:
-        assert step_frequency >= 0
-        assert agent_start_time > 0
-        assert exec_start_time is None or exec_start_time > 0
+        if step_frequency < 0:
+            raise ValueError('Step frequency cannot be negative!')
+        if agent_start_time <= 0:
+            raise ValueError('Agent start time must be positive!')
+        if exec_start_time is not None and exec_start_time <= 0:
+            raise ValueError('If it is defined, the execution start time must be positive!')
 
         super().__init__(
             agent_id=agent_id,

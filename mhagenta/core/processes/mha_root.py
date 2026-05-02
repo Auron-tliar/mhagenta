@@ -5,7 +5,8 @@ import sys
 import time
 from argparse import ArgumentError
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
+from collections.abc import Iterable
 
 import dill
 

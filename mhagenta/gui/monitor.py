@@ -1,10 +1,11 @@
 import tkinter as tk
 from tkinter import ttk
-import tkinter.font as tkFont
+import tkinter.font as tk_font
 from pydantic.dataclasses import dataclass
 import dataclasses
 import regex as re
-from typing import ClassVar, Optional, Iterable
+from typing import ClassVar
+from collections.abc import Iterable
 import asyncio
 
 from mhagenta.utils import StatusReport
@@ -28,7 +29,7 @@ class AgentInfo:
     modules: dict[str, str]
     agent_status: str
     log_level_index: int
-    logs: Optional[list[tuple[int, str, list[str]]]] = dataclasses.field(default_factory=list)
+    logs: list[tuple[int, str, list[str]]] | None = dataclasses.field(default_factory=list)
 
     def add_log(self, log: dict[str, str | int | bool | list[str]]) -> None:
         if log['status']:
@@ -97,8 +98,8 @@ class Monitor:
     def __init__(self, auto_select_new: bool = False, update_freq: float = 0.01) -> None:
         self._root = tk.Tk()
 
-        font = tkFont.nametofont('TkDefaultFont').actual()
-        self._font = tkFont.Font(self._root, family=font['family'], size=font['size'])
+        font = tk_font.nametofont('TkDefaultFont').actual()
+        self._font = tk_font.Font(self._root, family=font['family'], size=font['size'])
 
         self._root.columnconfigure(0, weight=0, minsize=32)
         self._root.columnconfigure(1, weight=1, minsize=32)
@@ -146,7 +147,7 @@ class Monitor:
         self._column_widths[-1] = 512
         self._logs_table.column('Message', stretch=True, width=self._column_widths[-1], minwidth=64, anchor='w')
 
-        self._agents_list.pack(expand=True, fill=tk.BOTH)
+        self._agents_list.pack(expand=True, fill='both')
 
         self._modules_list.grid(row=0, column=0, sticky='nwe', pady=4)
         self._level_frame.grid(row=1, column=0, sticky='nwe', pady=4)
@@ -178,7 +179,7 @@ class Monitor:
         self._stop = True
         self._root.destroy()
 
-    def _on_module_click(self, event: tk.Event) -> str:
+    def _on_module_click(self, event: tk.Event) -> str | None:
         selection = self._modules_list.selection()
         item = self._modules_list.identify_row(event.y)
         if item in selection:
@@ -189,9 +190,10 @@ class Monitor:
         else:
             self._selected_module = self._modules_list.item(item, option='text')
             self._redraw_log_table()
+            return None
 
     def add_agent(self, agent_id, module_ids: Iterable[str]):
-        iid = self._agents_list.insert('', tk.END, text=agent_id)
+        iid = self._agents_list.insert('', 'end', text=agent_id)
         self._agents[agent_id] = AgentInfo(
             iid=iid,
             agent_id=agent_id,
@@ -232,13 +234,12 @@ class Monitor:
                 self._selected_agent == agent.iid and
                 log['level'] >= self._selected_level and
                 (self._selected_module is None or self._selected_module == log['module_id'])):
-            self._logs_table.insert('', tk.END, values=log['values'])
+            self._logs_table.insert('', 'end', values=log['values'])
             for i, width in enumerate(self._column_widths):
                 cur_width = self._font.measure(log['values'][i]) + 10
                 if cur_width > width:
                     self._logs_table.column(i, width=cur_width)
                     self._column_widths[i] = cur_width
-
 
     def _on_select_agent(self, event: tk.Event | None = None) -> str:
         self._selected_agent = self._agents_list.selection()[0]
@@ -252,7 +253,7 @@ class Monitor:
         agent = self._agents[self._agents_list.item(self._selected_agent, option='text')]
         self._agents_list.item(self._selected_agent, tags=agent.agent_status)
         for module_id, status in agent.modules.items():
-            self._modules_list.insert('', tk.END, text=module_id, tags=status)
+            self._modules_list.insert('', 'end', text=module_id, tags=status)
 
         self._redraw_log_table()
         return 'break'
@@ -275,7 +276,7 @@ class Monitor:
         for level, module_id, log in self._agents[agent_id].logs:
 
             if level >= self._level_str_to_int[self._log_level_selector.get()] and (self._selected_module is None or self._selected_module == module_id):
-                self._logs_table.insert('', tk.END, values=log)
+                self._logs_table.insert('', 'end', values=log)
 
     @classmethod
     def parse_log_default(cls, log_entry: str) -> dict[str, str | int | list[str]] | None:

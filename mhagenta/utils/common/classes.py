@@ -1,11 +1,10 @@
 import logging
 import sys
-import os
 import time
 import uuid
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Any, ClassVar, Callable, Self, Iterable, Optional
+from typing import Any, ClassVar, Self, cast
+from collections.abc import Iterable, Callable
 from uuid import uuid4
 import dataclasses
 
@@ -381,10 +380,10 @@ class IDirectory(BaseDirectory):
         return card
 
     def __getitem__(self, item: str | int) -> ICard:
-        return super().__getitem__(item)
+        return cast(ICard, super().__getitem__(item))
 
     def search(self, tags: Iterable[str]) -> list[ICard]:
-        return super().search(tags)
+        return cast(list[ICard], super().search(tags))
 
     def __str__(self) -> str:
         return f'IDirectory(\n\t{'\n\t'.join([str(card) for card in self._content])})'
@@ -429,10 +428,10 @@ class EDirectory(BaseDirectory):
         return card
 
     def __getitem__(self, item: str | int) -> ECard:
-        return super().__getitem__(item)
+        return cast(ECard, super().__getitem__(item))
 
     def search(self, tags: Iterable[str]) -> list[ECard]:
-        return super().search(tags)
+        return cast(list[ECard], super().search(tags))
 
     @property
     def environments(self) -> list[ECard]:
@@ -484,7 +483,7 @@ class Belief:
     """
     predicate: str
     arguments: Any | tuple[Any, ...]
-    extras: Optional[dict[str, Any]] = None
+    extras: dict[str, Any] | None = None
 
 
 @dataclass
@@ -497,7 +496,7 @@ class Goal:
 
     """
     state: list[Belief]
-    extras: Optional[dict[str, Any]] = None
+    extras: dict[str, Any] | None = None
 
     def __init__(self, state: list[Belief], **kwargs) -> None:
         super().__init__(state=state, misc=kwargs)
@@ -513,7 +512,7 @@ class Observation:
 
     """
     content: Any
-    observation_type: Optional[str] = 'Any'
+    observation_type: str | None = 'Any'
     value: float | None = None
 
     def __str__(self) -> str:

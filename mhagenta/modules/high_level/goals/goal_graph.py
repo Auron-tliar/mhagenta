@@ -1,4 +1,5 @@
-from typing import Iterable, ClassVar
+from typing import ClassVar
+from collections.abc import Iterable
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Goal, State
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase

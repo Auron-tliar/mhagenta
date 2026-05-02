@@ -1,8 +1,9 @@
 import asyncio
 import logging
-from os import PathLike
+import os
 from types import FrameType
-from typing import Iterable, Any, Literal, Callable
+from typing import Any, Literal
+from collections.abc import Iterable, Callable
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -62,6 +63,8 @@ class MHAEnvBase:
             level (int): log level
             message (str): log message
         """
+        if self._log_func is None:
+            raise TypeError('Log function has not been set properly during initialization')
         self._log_func(level, message)
 
 
@@ -75,7 +78,7 @@ class MHAEnvironment(MHABase, ABC):
                  env_id: str = "environment",
                  exec_duration: float = 60.,
                  start_time_reference: float | None = None,
-                 save_dir: PathLike | None = None,
+                 save_dir: os.PathLike | None = None,
                  save_format: Literal['json', 'dill'] = 'json',
                  log_id: str | None = None,
                  log_tags: list[str] | None = None,
