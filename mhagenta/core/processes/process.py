@@ -280,15 +280,19 @@ class MHAProcess(MHABase, ABC):
 
         self._task_group: asyncio.TaskGroup | None = None
         self._main_loop: asyncio.Task | None = None
+        self._asyncio_loop: asyncio.AbstractEventLoop | None = None
 
         self._stage = self.Stage.created
         self._error_status: None | Exception = None
 
         self._stop_reason: str = ''
 
+        self._wakeup_event = asyncio.Event()
+
     async def initialize(self) -> None:
         if self._stage >= self.Stage.initializing:
             return
+        self._asyncio_loop = asyncio.get_running_loop()
         self._stage = self.Stage.initializing
         await self.on_init()
         self._stage = self.Stage.initialized
@@ -330,7 +334,14 @@ class MHAProcess(MHABase, ABC):
 
             except Exception as ex:
                 await self.on_error(ex)
-            await asyncio.sleep(min(self._control_frequency, self._queue.next_wait()))
+            try:
+                await asyncio.wait_for(
+                    self._wakeup_event.wait(),
+                    timeout=min(self._control_frequency, self._queue.next_wait()))
+                self._wakeup_event.clear()
+            except asyncio.TimeoutError:
+                pass
+
         self._stop_reason = 'TIMEOUT'
 
     async def on_stage_change(self) -> None:
@@ -360,6 +371,11 @@ class MHAProcess(MHABase, ABC):
     @property
     def time(self) -> AgentTime:
         return self._time
+
+    def _wakeup(self) -> None:
+        if self._asyncio_loop is None:
+            return
+        self._asyncio_loop.call_soon_threadsafe(self._wakeup_event.set)
 
     @property
     def _logger_extras(self) -> LoggerExtras | None:

@@ -274,6 +274,7 @@ class MHAModule(MHAProcess):
             self._step_counter += 1
             update = self._base.on_first(self._state)
             self._process_update(update)
+            self._wakeup()
         except Exception as ex:
             self.warning(f'Caught exception \"{ex}\" while running the first (pre) step action!'
                          f' Aborting and attempting to resume execution...')
@@ -311,16 +312,19 @@ class MHAModule(MHAProcess):
                 self._time.set_exec_start_ts(start_ts)  # self._time.agent_start_ts +
                 self._stop_time = start_ts - self._time.system + self._time.agent + self._exec_duration
                 # self._stage = self.Stage.starting
+                ts = self._time.exec_start_ts - self._time.system + self._time.agent
                 self._queue.push(
                     func=self._run,
-                    ts=self._time.exec_start_ts - self._time.system + self._time.agent, # - self._time.agent_start_ts,
+                    ts=ts,
                     priority=True,
                     periodic=False
                 )
+                self._wakeup()
             case cmd.STOP:
                 self.info(f'Received {cmd.STOP} command (reason: {cmd.args["reason"]})')
                 self._stage = self.Stage.stopping
                 self._stop_reason = cmd.args['reason']
+                self._wakeup()
             case _:
                 self.warning(f'Received unknown command {cmd.cmd}! Ignoring...')
 
@@ -331,6 +335,7 @@ class MHAModule(MHAProcess):
             priority=True,
             cmd=task_cmd
         )
+        self._wakeup()
 
     def _on_msg_task_generator(self, callback: MessageCallback) -> MsgProcessorCallback:
         def push_task(task_sender: str, task_channel: str, task_msg: Message) -> None:
@@ -349,6 +354,7 @@ class MHAModule(MHAProcess):
                 channel=task_channel,
                 msg=task_msg
             )
+            self._wakeup()
 
         return push_task
 
