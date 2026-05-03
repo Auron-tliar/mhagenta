@@ -47,7 +47,7 @@ class Entry:
     port_mapping: dict[int, int] | None = None
     script_path: Path | None = None
     requirements_path: Path | None = None
-    extra_runtime_sources: tuple[Path, ...] = ()
+    extra_runtime_sources: tuple[Path, ...] = tuple()
 
 
 @dataclass
@@ -56,7 +56,7 @@ class AgentEntry(Entry):
     save_dir: Path | None = None
     num_copies: int = 1
 
-    _flat_modules: list[ModuleBase] = field(default_factory=list())
+    _flat_modules: list[ModuleBase] = field(default_factory=list)
 
     _MODULE_KEYS: ClassVar[tuple[str, ...]] = ('perceptors', 'actuators', 'll_reasoners', 'learners',
                                                'knowledge', 'hl_reasoners', 'goal_graphs', 'memory')
@@ -1135,7 +1135,7 @@ class Orchestrator:
     @staticmethod
     def _module_source_root(module_name: str, module_file: Path) -> Path:
         root = module_file.parent
-        steps_up = module_file.name.count('.') - 1
+        steps_up = module_name.count('.')
         if module_file.name == '__init__.py':
             steps_up += 1
         for _ in range(steps_up):
@@ -1160,7 +1160,7 @@ class Orchestrator:
         else:
             shutil.copy2(src, dst)
 
-        copied[src.name] = dst
+        copied[src.name] = src
 
     @classmethod
     def _copy_explicit_runtime_sources(cls, sources: Iterable[Path], dst_dir: Path, copied: dict[str, Path]) -> None:
@@ -1200,6 +1200,6 @@ class Orchestrator:
             if not src.exists():
                 src = root / f'{top_name}.py'
             if not src.exists():
-                raise FileNotFoundError(f'Could not resolve runtime source for module "{module_name}" from "{module_file}"')
+                raise FileNotFoundError(f'Could not resolve runtime source for module "{module_name}" from "{module_file}": "{src}')
 
             self._copy_runtime_sources(src, dst_dir, copied)
