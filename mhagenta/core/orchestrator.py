@@ -196,7 +196,6 @@ class LogParser:
 class BuildSpec:
     image_tag: str
     display_name: str
-    entry_id: str
     launcher_src: Path
     start_script_src: Path
     params_filename: str
@@ -802,7 +801,6 @@ class Orchestrator:
         spec = BuildSpec(
             image_tag=f'mhagent:{agent.agent_id}',
             display_name='AGENT',
-            entry_id=agent.agent_id,
             launcher_src=Path(mhagenta.core.__file__).parent.resolve() / 'agent_launcher.py',
             start_script_src=Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'start.sh',
             params_filename='agent_params',
@@ -833,7 +831,6 @@ class Orchestrator:
         spec = BuildSpec(
             image_tag=f'mhagent-env:{environment.env_id}',
             display_name='ENVIRONMENT',
-            entry_id=environment.env_id,
             launcher_src=Path(mhagenta.environment.__file__).parent.resolve() / 'environment_launcher.py',
             start_script_src=Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'env_start.sh',
             params_filename='env_params',
