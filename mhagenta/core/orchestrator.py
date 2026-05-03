@@ -38,17 +38,23 @@ from mhagenta.utils.common.classes import EDirectory
 
 
 @dataclass
-class AgentEntry:
-    agent_id: str
+class Entry:
     kwargs: dict[str, Any]
     dir: Path | None = None
-    save_dir: Path | None = None
+    tags: Iterable[str] | None = None
     image: Image | None = None
     container: Container | None = None
     port_mapping: dict[int, int] | None = None
-    num_copies: int = 1
-    tags: Iterable[str] | None = None
+    script_path: Path | None = None
+    requirements_path: Path | None = None
     extra_runtime_sources: tuple[Path, ...] = ()
+
+
+@dataclass
+class AgentEntry(Entry):
+    agent_id: str = field(kw_only=True)
+    save_dir: Path | None = None
+    num_copies: int = 1
 
     _flat_modules: list[ModuleBase] = field(default_factory=list())
 
@@ -89,16 +95,9 @@ class AgentEntry:
 
 
 @dataclass
-class EnvironmentEntry:
-    env_id: str
-    kwargs: dict[str, Any]
-    address: dict[str, Any]
-    dir: Path | None = None
-    tags: list[str] | None = None
-    image: Image | None = None
-    container: Container | None = None
-    port_mapping: dict[int, int] | None = None
-    extra_runtime_sources: tuple[Path, ...] = ()
+class EnvironmentEntry(Entry):
+    env_id: str = field(kw_only=True)
+    address: dict[str, Any] = field(kw_only=True)
 
     @property
     def base(self) -> MHAEnvBase:
@@ -193,6 +192,18 @@ class LogParser:
             await asyncio.sleep(self._check_freq)
 
 
+@dataclass(frozen=True)
+class BuildSpec:
+    image_tag: str
+    display_name: str
+    entry_id: str
+    launcher_src: Path
+    start_script_src: Path
+    params_filename: str
+    runtime_objects: tuple[Any, ...]
+    extra_runtime_sources: tuple[Path, ...]
+
+
 class Orchestrator:
     """Orchestrator class that handles MHAgentA execution.
 
@@ -203,27 +214,28 @@ class Orchestrator:
     SAVE_SUBDIR = 'out/save'
     LOG_CHECK_FREQ = 1.
 
-    def __init__(self,
-                 save_dir: str | os.PathLike,
-                 port_mapping: dict[int, int] | None = None,
-                 step_frequency: float = 1.,
-                 status_frequency: float = 5.,
-                 control_frequency: float = -1.,
-                 exec_start_time: float | None = None,
-                 agent_start_delay: float = 60.,
-                 exec_duration: float = 60.,
-                 save_format: Literal['json', 'dill'] = 'json',
-                 resume: bool = False,
-                 log_level: int = logging.INFO,
-                 log_format: str | None = None,
-                 status_msg_format: str = '[status_upd]::{}',
-                 connector_cls: type[Connector] = RabbitMQConnector,
-                 connector_kwargs: dict[str, Any] | None = None,
-                 mas_rmq_uri: str | Literal['default'] | None = None,
-                 mas_rmq_close_on_exit: bool = True,
-                 mas_rmq_exchange_name: str | None = None,
-                 save_logs: bool = True
-                 ) -> None:
+    def __init__(
+            self,
+            save_dir: str | os.PathLike,
+            port_mapping: dict[int, int] | None = None,
+            step_frequency: float = 1.,
+            status_frequency: float = 5.,
+            control_frequency: float = -1.,
+            exec_start_time: float | None = None,
+            agent_start_delay: float = 60.,
+            exec_duration: float = 60.,
+            save_format: Literal['json', 'dill'] = 'json',
+            resume: bool = False,
+            log_level: int = logging.INFO,
+            log_format: str | None = None,
+            status_msg_format: str = '[status_upd]::{}',
+            connector_cls: type[Connector] = RabbitMQConnector,
+            connector_kwargs: dict[str, Any] | None = None,
+            mas_rmq_uri: str | Literal['default'] | None = None,
+            mas_rmq_close_on_exit: bool = True,
+            mas_rmq_exchange_name: str | None = None,
+            save_logs: bool = True
+    ) -> None:
         """
         Constructor method for Orchestrator.
 
@@ -342,22 +354,23 @@ class Orchestrator:
             save_logs=self._save_dir if save_logs else None
         )
 
-    def add_environment(self,
-                        base: MHAEnvBase,
-                        env_id: str = "environment",
-                        host: str | None = 'localhost',
-                        port: int | None = 5672,
-                        exec_duration: float | None = None,
-                        exchange_name: str | None = None,
-                        init_script: os.PathLike | str | None = None,
-                        requirements_path: os.PathLike | str | None = None,
-                        port_mapping: dict[int, int] | None = None,
-                        log_tags: list[str] | None = None,
-                        log_level: int | str | None = None,
-                        log_format: str | None = None,
-                        tags: Iterable[str] | None = None,
-                        extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None
-                        ) -> None:
+    def add_environment(
+            self,
+            base: MHAEnvBase,
+            env_id: str = "environment",
+            host: str | None = 'localhost',
+            port: int | None = 5672,
+            exec_duration: float | None = None,
+            exchange_name: str | None = None,
+            init_script: os.PathLike | str | None = None,
+            requirements_path: os.PathLike | str | None = None,
+            port_mapping: dict[int, int] | None = None,
+            log_tags: list[str] | None = None,
+            log_level: int | str | None = None,
+            log_format: str | None = None,
+            tags: Iterable[str] | None = None,
+            extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None
+    ) -> None:
         """
         Add a configuration of an environment to build at the runtime.
 
@@ -388,6 +401,8 @@ class Orchestrator:
         """
         from mhagenta.defaults.communication.rabbitmq import RMQEnvironment
         if host is None:
+            if self._mas_rmq_uri is None:
+                raise ValueError('No RabbitMQ URI specified for the environment!')
             mas_host, mas_port = self._mas_rmq_uri.split(':')
             host = mas_host
             if port is None:
@@ -414,11 +429,6 @@ class Orchestrator:
             'tags': tags
         }
 
-        if requirements_path is not None:
-            kwargs['requirements_path'] = Path(requirements_path).resolve()
-        if init_script is not None:
-            kwargs['init_script'] = Path(init_script).resolve()
-
         self._environments[env_id] = EnvironmentEntry(
             env_id=env_id,
             kwargs=kwargs,
@@ -429,6 +439,8 @@ class Orchestrator:
             dir=env_dir,
             tags=tags,
             port_mapping=port_mapping if port_mapping else self._port_mapping,
+            script_path=Path(init_script).resolve() if init_script is not None else None,
+            requirements_path=Path(requirements_path).resolve() if requirements_path is not None else None,
             extra_runtime_sources=self._normalize_runtime_sources(extra_runtime_sources)
         )
 
@@ -443,33 +455,34 @@ class Orchestrator:
         if conn_params['host'] == 'localhost':
             conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
 
-    def add_agent(self,
-                  agent_id: str,
-                  perceptors: Iterable[PerceptorBase] | PerceptorBase,
-                  actuators: Iterable[ActuatorBase] | ActuatorBase,
-                  ll_reasoners: Iterable[LLReasonerBase] | LLReasonerBase,
-                  learners: Iterable[LearnerBase] | LearnerBase | None = None,
-                  knowledge: Iterable[KnowledgeBase] | KnowledgeBase | None = None,
-                  hl_reasoners: Iterable[HLReasonerBase] | HLReasonerBase | None = None,
-                  goal_graphs: Iterable[GoalGraphBase] | GoalGraphBase | None = None,
-                  memory: Iterable[MemoryBase] | MemoryBase | None = None,
-                  num_copies: int = 1,
-                  step_frequency: float | None = None,
-                  status_frequency: float | None = None,
-                  control_frequency: float | None = None,
-                  exec_start_time: float | None = None,
-                  start_delay: float = 0.,
-                  exec_duration: float | None = None,
-                  resume: bool | None = None,
-                  init_script: os.PathLike | str | None = None,
-                  requirements_path: os.PathLike | str | None = None,
-                  log_level: int | None = None,
-                  port_mapping: dict[int, int] | None = None,
-                  connector_cls: type[Connector] | None = None,
-                  connector_kwargs: dict[str, Any] | None = None,
-                  tags: Iterable[str] | None = None,
-                  extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None
-                  ) -> None:
+    def add_agent(
+            self,
+            agent_id: str,
+            perceptors: Iterable[PerceptorBase] | PerceptorBase,
+            actuators: Iterable[ActuatorBase] | ActuatorBase,
+            ll_reasoners: Iterable[LLReasonerBase] | LLReasonerBase,
+            learners: Iterable[LearnerBase] | LearnerBase | None = None,
+            knowledge: Iterable[KnowledgeBase] | KnowledgeBase | None = None,
+            hl_reasoners: Iterable[HLReasonerBase] | HLReasonerBase | None = None,
+            goal_graphs: Iterable[GoalGraphBase] | GoalGraphBase | None = None,
+            memory: Iterable[MemoryBase] | MemoryBase | None = None,
+            num_copies: int = 1,
+            step_frequency: float | None = None,
+            status_frequency: float | None = None,
+            control_frequency: float | None = None,
+            exec_start_time: float | None = None,
+            start_delay: float = 0.,
+            exec_duration: float | None = None,
+            resume: bool | None = None,
+            init_script: os.PathLike | str | None = None,
+            requirements_path: os.PathLike | str | None = None,
+            log_level: int | None = None,
+            port_mapping: dict[int, int] | None = None,
+            connector_cls: type[Connector] | None = None,
+            connector_kwargs: dict[str, Any] | None = None,
+            tags: Iterable[str] | None = None,
+            extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None
+    ) -> None:
         """Define an agent model to be added to the execution.
 
         This can be either a single agent, a set of identical agents following the same structure model.
@@ -558,17 +571,14 @@ class Orchestrator:
             'status_msg_format': self._status_msg_format
         }
 
-        if init_script is not None:
-            kwargs['init_script'] = Path(init_script).resolve()
-        if requirements_path is not None:
-            kwargs['requirements_path'] = Path(requirements_path).resolve()
-
         self._agents[agent_id] = AgentEntry(
             agent_id=agent_id,
             port_mapping=port_mapping if port_mapping else self._port_mapping,
             num_copies=num_copies,
             kwargs=kwargs,
             tags=tags,
+            script_path=Path(init_script).resolve() if init_script is not None else None,
+            requirements_path=Path(requirements_path).resolve() if requirements_path is not None else None,
             extra_runtime_sources=self._normalize_runtime_sources(extra_runtime_sources)
         )
         if self._task_group is not None:
@@ -606,11 +616,12 @@ class Orchestrator:
             )
         return directory
 
-    def _docker_build_base(self,
-                           mhagenta_version: str = 'latest',
-                           local_build: os.PathLike | str | None = None,
-                           prerelease: bool = False
-                           ) -> None:
+    def _docker_build_base(
+            self,
+            mhagenta_version: str = 'latest',
+            local_build: os.PathLike | str | None = None,
+            prerelease: bool = False
+    ) -> None:
         if not mhagenta_version:
             mhagenta_version = CONTAINER_VERSION
 
@@ -690,156 +701,159 @@ class Orchestrator:
             raise e
 
     @staticmethod
-    def _copy_extras(extra_kwargs: dict[str, Any], build_dir: Path) -> None:
-        if 'init_script' in extra_kwargs:
-            init_script = extra_kwargs.pop('init_script')
-            shutil.copy(init_script, (build_dir / 'src' / 'init_script.sh').resolve())
+    def _copy_extras(entry: Entry, build_dir: Path) -> None:
+        if entry.script_path:
+            shutil.copy(entry.script_path, (build_dir / 'src' / 'init_script.sh').resolve())
 
-        if 'requirements_path' in extra_kwargs:
-            requirements_path = extra_kwargs.pop('requirements_path')
-            shutil.copy(requirements_path, (build_dir / 'src' / 'requirements.txt').resolve())
+        if entry.requirements_path:
+            shutil.copy(entry.requirements_path, (build_dir / 'src' / 'requirements.txt').resolve())
 
-    def _docker_build(self,
-                      build_dir: Path,
-                      src_tag: tuple[str, str],
-                      tag: str,
-                      ) -> docker.models.images.Image:
-        image, _ = self._logged_build(path=str(build_dir.resolve()),
-                                      buildargs={
-                                          'SRC_IMAGE': src_tag[0],
-                                          'SRC_VERSION': src_tag[1]
-                                      },
-                                      tag=tag,
-                                      rm=True,
-                                      quiet=False
-                                      )
+    def _docker_build(
+            self,
+            build_dir: Path,
+            src_tag: tuple[str, str],
+            tag: str,
+    ) -> Image:
+        image, _ = self._logged_build(
+            path=str(build_dir.resolve()),
+            buildargs={
+                'SRC_IMAGE': src_tag[0],
+                'SRC_VERSION': src_tag[1]
+            },
+            tag=tag,
+            rm=True,
+            quiet=False
+        )
         shutil.rmtree(build_dir)
         return image
 
-    def _docker_build_agent(self,
-                            agent: AgentEntry,
-                            rebuild_image: bool = True,
-                            ) -> None:
-        assert self._base_image is not None, 'Base image is not set!'
+    def _docker_build_runtime(
+            self,
+            spec: BuildSpec,
+            out_dir: Path,
+            params: dict[str, Any],
+            entry: Entry,
+            rebuild_image: bool
+    ) -> Image:
         try:
-            img = self._docker_client.images.list(name=f'mhagent:{agent.agent_id}')[0]
+            img = self._docker_client.images.list(name=spec.image_tag)[0]
             if rebuild_image:
                 img.remove(force=True)
             else:
-                agent.image = img
-                print(f'===== AGENT IMAGE FOUND: mhagent:{agent.agent_id} (NO REBUILD REQUESTED) =====')
-                return
+                print(f'===== {spec.display_name} IMAGE FOUND: {spec.image_tag} (NO REBUILD REQUESTED) =====')
+                return img
         except IndexError:
             if not rebuild_image:
-                raise ValueError(f'Image {f'mhagent:{agent.agent_id}'} is not found!')
-        print(f'===== BUILDING AGENT IMAGE: mhagent:{agent.agent_id} FROM {self._base_image.tags[0]} =====')
-        agent_dir = self._save_dir.resolve() / agent.agent_id
-        if self._force_run and agent_dir.exists():
-            shutil.rmtree(agent_dir)
+                raise ValueError(f'Image {spec.image_tag} is not found!')
 
-        (agent_dir / 'out/').mkdir(parents=True)
-        agent.dir = agent_dir
-        agent.save_dir = agent_dir / 'out' / 'save'
+        assert self._base_image is not None, 'Base image is not set!'
+        base_image_tag = sorted(cast(list[str], self._base_image.tags))[-1]
+        print(f'===== BUILDING {spec.display_name} IMAGE: {spec.image_tag} FROM {base_image_tag} =====')
 
-        build_dir = agent_dir / 'tmp/'
+        if self._force_run and out_dir.exists():
+            shutil.rmtree(out_dir)
+
+        (out_dir / 'out').mkdir(parents=True)
+        build_dir = out_dir / 'tmp/'
+
         shutil.copytree(AGENT_IMG_PATH, build_dir.resolve())
-        (build_dir / 'src').mkdir(parents=True, exist_ok=True)
+        src_dir = (build_dir / 'src')
+        src_dir.mkdir(parents=True, exist_ok=True)
+
+        shutil.copy(spec.launcher_src, src_dir / spec.launcher_src.name)
+        shutil.copy(spec.start_script_src, src_dir / 'start.sh')
+
+        self._copy_extras(entry, build_dir)
+
+        runtime_sources: dict[str, Path] = {}
+
+        self._copy_runtime_python_modules(spec.runtime_objects, src_dir, runtime_sources)
+        self._copy_explicit_runtime_sources(spec.extra_runtime_sources, src_dir, runtime_sources)
+
+        with open((src_dir / spec.params_filename).resolve(), 'wb') as f:
+            dill.dump(params, f, recurse=True)
+
+        base_tag_split = cast(tuple[str, str], tuple(base_image_tag.split(':', 1)))
+        return self._docker_build(build_dir=build_dir,
+                                  src_tag=base_tag_split,
+                                  tag=spec.image_tag
+                                  )
+
+    def _docker_build_agent(
+            self,
+            agent: AgentEntry,
+            rebuild_image: bool = True,
+    ) -> None:
         assert mhagenta.__file__ is not None, 'Cannot locate mhagenta package!'
         assert mhagenta.core.__file__ is not None, 'Cannot locate mhagenta.core package!'
-        shutil.copy(Path(mhagenta.core.__file__).parent.resolve() / 'agent_launcher.py', (build_dir / 'src' / 'agent_launcher.py').resolve())
-        shutil.copy(Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'start.sh', (build_dir / 'src' / 'start.sh').resolve())
 
-        agent.kwargs['directory'] = self._compose_directory()
+        agent_dir = self._save_dir.resolve() / agent.agent_id
+        agent.dir = agent_dir
+        agent.save_dir = agent_dir / 'out'
 
-        if agent.kwargs['exec_start_time'] is None:
-            agent.kwargs['exec_start_time'] = self._start_time
+        params = agent.kwargs.copy()
+        params['directory'] = self._compose_directory()
+        exec_start_time = self._start_time if params['exec_start_time'] is None else params['exec_start_time']
+        params['exec_start_time'] = exec_start_time + self._agent_start_delay
 
-        agent.kwargs['exec_start_time'] += self._agent_start_delay
+        end_estimate = params['exec_start_time'] + params['start_delay'] + params['exec_duration']
+        self._simulation_end_ts = max(self._simulation_end_ts, end_estimate)
 
-        end_estimate = agent.kwargs['exec_start_time'] + agent.kwargs['start_delay'] + agent.kwargs['exec_duration']
-        if self._simulation_end_ts < end_estimate:
-            self._simulation_end_ts = end_estimate
+        spec = BuildSpec(
+            image_tag=f'mhagent:{agent.agent_id}',
+            display_name='AGENT',
+            entry_id=agent.agent_id,
+            launcher_src=Path(mhagenta.core.__file__).parent.resolve() / 'agent_launcher.py',
+            start_script_src=Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'start.sh',
+            params_filename='agent_params',
+            runtime_objects=tuple(agent.modules),
+            extra_runtime_sources=agent.extra_runtime_sources
+        )
 
-        self._copy_extras(agent.kwargs, build_dir)
+        agent.image = self._docker_build_runtime(
+            spec=spec,
+            out_dir=agent_dir,
+            params=params,
+            entry=agent,
+            rebuild_image=rebuild_image
+        )
 
-        runtime_sources: dict[str, Path] = dict()
-        src_dir = build_dir / 'src'
-
-        self._copy_runtime_python_modules(agent.modules, src_dir, runtime_sources)
-        self._copy_explicit_runtime_sources(agent.extra_runtime_sources, src_dir, runtime_sources)
-
-        with open((build_dir / 'src' / 'agent_params').resolve(), 'wb') as f:
-            dill.dump(agent.kwargs, f, recurse=True)
-
-        self._docker_build(build_dir=build_dir,
-                           src_tag=self._base_image.tags[0].split(':'),
-                           tag=f'mhagent:{agent.agent_id}'
-                           )
-
-    def _docker_build_env(self,
-                          environment: EnvironmentEntry,
-                          rebuild_image: bool = True,
-                    ) -> None:
-        assert self._base_image is not None, 'Base image is not set!'
-        try:
-            img = self._docker_client.images.list(name=f'mhagent-env:{environment.env_id}')[0]
-            if rebuild_image:
-                img.remove(force=True)
-            else:
-                environment.image = img
-                print(f'===== ENVIRONMENT IMAGE FOUND: mhagent:{environment.env_id} (NO REBUILD REQUESTED) =====')
-                return
-        except IndexError:
-            if not rebuild_image:
-                raise ValueError(f'Image {f'mhagent:{environment.env_id}'} is not found!')
-        print(f'===== BUILDING ENVIRONMENT IMAGE: mhagent-env:{environment.env_id} FROM {self._base_image.tags[0]} =====')
-        env_dir = self._save_dir.resolve() / environment.env_id
-        if self._force_run and env_dir.exists():
-            shutil.rmtree(env_dir)
-
-        (env_dir / 'out/').mkdir(parents=True)
-        environment.dir = env_dir
-
-        build_dir = env_dir / 'tmp/'
-        shutil.copytree(AGENT_IMG_PATH, build_dir.resolve())
-        (build_dir / 'src').mkdir(parents=True, exist_ok=True)
+    def _docker_build_env(
+            self,
+            environment: EnvironmentEntry,
+            rebuild_image: bool = True,
+    ) -> None:
         assert mhagenta.__file__ is not None, 'Cannot locate magenta package!'
         assert mhagenta.environment.__file__ is not None, 'Cannot locate magenta.environment package!'
-        shutil.copy(Path(mhagenta.environment.__file__).parent.resolve() / 'environment_launcher.py', (build_dir / 'src' / 'environment_launcher.py').resolve())
-        shutil.copy(Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'env_start.sh', (build_dir / 'src' / 'start.sh').resolve())
 
-        self._copy_extras(environment.kwargs, build_dir)
+        env_dir = self._save_dir.resolve() / environment.env_id
+        environment.dir = env_dir
+        params = environment.kwargs.copy()
 
-        runtime_sources: dict[str, Path] = dict()
-        src_dir = build_dir / 'src'
+        spec = BuildSpec(
+            image_tag=f'mhagent-env:{environment.env_id}',
+            display_name='ENVIRONMENT',
+            entry_id=environment.env_id,
+            launcher_src=Path(mhagenta.environment.__file__).parent.resolve() / 'environment_launcher.py',
+            start_script_src=Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'env_start.sh',
+            params_filename='env_params',
+            runtime_objects=(environment.base,),
+            extra_runtime_sources=environment.extra_runtime_sources
+        )
 
-        self._copy_runtime_python_modules((environment.base,), src_dir, runtime_sources)
-        self._copy_explicit_runtime_sources(environment.extra_runtime_sources, src_dir, runtime_sources)
+        environment.image = self._docker_build_runtime(
+            spec=spec,
+            out_dir=env_dir,
+            params=params,
+            entry=environment,
+            rebuild_image=rebuild_image
+        )
 
-        with open((build_dir / 'src' / 'env_params').resolve(), 'wb') as f:
-            dill.dump(environment.kwargs, f, recurse=True)
-
-        self._docker_build(build_dir=build_dir,
-                           src_tag=self._base_image.tags[0].split(':'),
-                           tag=f'mhagent-env:{environment.env_id}'
-                           )
-
-        base_tag = self._base_image.tags[0].split(':')
-        environment.image, _ = self._logged_build(path=str(build_dir.resolve()),
-                                                  buildargs={
-                                                      'SRC_IMAGE': base_tag[0],
-                                                      'SRC_VERSION': base_tag[1]
-                                                  },
-                                                  tag=f'mhagent-env:{environment.env_id}',
-                                                  rm=True,
-                                                  quiet=False
-                                                  )
-        shutil.rmtree(build_dir)
-
-    async def _run_agent(self,
-                         agent: AgentEntry,
-                         force_run: bool = False
-                         ) -> None:
+    async def _run_agent(
+            self,
+            agent: AgentEntry,
+            force_run: bool = False
+    ) -> None:
         if agent.num_copies == 1:
             print(f'===== RUNNING AGENT IMAGE \"mhagent:{agent.agent_id}\" AS CONTAINER \"{agent.agent_id}\" =====')
         else:
@@ -875,10 +889,11 @@ class Orchestrator:
                 ports=agent.port_mapping
             )
 
-    async def _run_env(self,
-                       environment: EnvironmentEntry,
-                       force_run: bool = False
-                       ) -> None:
+    async def _run_env(
+            self,
+            environment: EnvironmentEntry,
+            force_run: bool = False
+    ) -> None:
         print(f'===== RUNNING ENVIRONMENT IMAGE \"mhagent-env:{environment.env_id}\" AS CONTAINER \"{environment.env_id}\" =====')
 
         env_dir = (environment.dir / "out").resolve()
@@ -905,16 +920,17 @@ class Orchestrator:
             ports=environment.port_mapping
         )
 
-    async def arun(self,
-                   mhagenta_version: str = 'latest',
-                   force_run: bool = False,
-                   gui: bool = False,
-                   rebuild_agents: bool = True,
-                   rebuild_envs: bool = True,
-                   local_build: os.PathLike | str | None = None,
-                   prerelease: bool = False,
-                   keep_containers: bool = False
-                   ) -> None:
+    async def arun(
+            self,
+            mhagenta_version: str = 'latest',
+            force_run: bool = False,
+            gui: bool = False,
+            rebuild_agents: bool = True,
+            rebuild_envs: bool = True,
+            local_build: os.PathLike | str | None = None,
+            prerelease: bool = False,
+            keep_containers: bool = False
+    ) -> None:
         """Run all the agents as an async method. Use in case you want to control the async task loop yourself.
 
         Args:
@@ -988,7 +1004,8 @@ class Orchestrator:
                 pass
         print('===== EXECUTION FINISHED =====')
 
-    def run(self,
+    def run(
+            self,
             mhagenta_version='latest',
             force_run: bool = False,
             gui: bool = False,
@@ -997,7 +1014,7 @@ class Orchestrator:
             local_build: os.PathLike | str | None = None,
             prerelease: bool = False,
             keep_containers: bool = False
-            ) -> None:
+    ) -> None:
         """Run all the agents.
 
         Args:
@@ -1033,6 +1050,7 @@ class Orchestrator:
 
     @staticmethod
     def _agent_stopped(agent: AgentEntry | EnvironmentEntry) -> bool:
+        assert agent.container is not None, 'Container is not set!'
         agent.container.reload()
         return agent.container.status == 'exited'
 
@@ -1173,7 +1191,7 @@ class Orchestrator:
 
             module_file = Path(module_file_str).resolve()
             parts = {part.lower() for part in module_file.parts}
-            if parts & venv_parts or any(p.startswith('.venv') or (p / 'pyvenv.cfg').exists() for p in parts):
+            if parts & venv_parts or any(p.startswith('.venv') or (Path(p) / 'pyvenv.cfg').exists() for p in parts):
                 continue
             if any(module_file.is_relative_to(stdlib_dir) for stdlib_dir in stdlib_dirs):
                 continue
