@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import time
+import warnings
 from asyncio import TaskGroup
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -264,6 +265,7 @@ class Orchestrator:
             save_dir.mkdir(parents=True, exist_ok=True)
         self._save_dir = save_dir
 
+        assert mhagenta.__file__ is not None, 'Cannot locate mhagenta package!'
         self._package_dir = str(Path(mhagenta.__file__).parent.resolve())
 
         self._connector_cls = connector_cls if connector_cls else RabbitMQConnector
@@ -305,14 +307,12 @@ class Orchestrator:
         self._start_time: float = -1.
         self._simulation_end_ts = -1.
 
-        self._docker_client: docker.DockerClient | None = None
+        self._docker_client: docker.DockerClient = docker.from_env()
         self._rabbitmq_image: Image | None = None
         self._base_image: Image | None = None
 
         self._task_group: TaskGroup | None = None
         self._force_run = False
-
-        self._docker_init()
 
         self._monitor: Monitor | None = None
 
@@ -325,9 +325,6 @@ class Orchestrator:
             check_freq=1.,
             save_logs=self._save_dir if save_logs else None
         )
-
-    def _docker_init(self) -> None:
-        self._docker_client = docker.from_env()
 
     def add_environment(self,
                         base: MHAEnvBase,
@@ -377,6 +374,8 @@ class Orchestrator:
                 port = mas_port
         env_dir = self._save_dir.resolve() / env_id
         env_dir.mkdir(parents=True, exist_ok=True)
+        if tags is not None:
+            tags = list(tags)
         kwargs = {
             'env_class': RMQEnvironment,
             'base': base,
@@ -412,9 +411,16 @@ class Orchestrator:
             port_mapping=port_mapping if port_mapping else self._port_mapping
         )
 
-    def _update_external_host(self, module: ActuatorBase | PerceptorBase):
-        if 'external' in module.tags and module.conn_params['host'] == 'localhost':
-            module.conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
+    @staticmethod
+    def _update_external_host(module: ActuatorBase | PerceptorBase):
+        if 'external'not  in module.tags:
+            return
+        conn_params = getattr(module, 'conn_params', None)
+        if conn_params is None:
+            warnings.warn(f'Module {module} has "external" tag but no connection parameters, ignoring it.')
+            return
+        if conn_params['host'] == 'localhost':
+            conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
 
     def add_agent(self,
                   agent_id: str,
@@ -657,10 +663,38 @@ class Orchestrator:
                             print(f'\t[{d_key}] {d_val}')
             raise e
 
+    @staticmethod
+    def _copy_extras(extra_kwargs: dict[str, Any], build_dir: Path) -> None:
+        if 'init_script' in extra_kwargs:
+            init_script = extra_kwargs.pop('init_script')
+            shutil.copy(init_script, (build_dir / 'src' / 'init_script.sh').resolve())
+
+        if 'requirements_path' in extra_kwargs:
+            requirements_path = extra_kwargs.pop('requirements_path')
+            shutil.copy(requirements_path, (build_dir / 'src' / 'requirements.txt').resolve())
+
+    def _docker_build(self,
+                      build_dir: Path,
+                      src_tag: tuple[str, str],
+                      tag: str,
+                      ) -> docker.models.images.Image:
+        image, _ = self._logged_build(path=str(build_dir.resolve()),
+                                      buildargs={
+                                          'SRC_IMAGE': src_tag[0],
+                                          'SRC_VERSION': src_tag[1]
+                                      },
+                                      tag=tag,
+                                      rm=True,
+                                      quiet=False
+                                      )
+        shutil.rmtree(build_dir)
+        return image
+
     def _docker_build_agent(self,
                             agent: AgentEntry,
                             rebuild_image: bool = True,
                             ) -> None:
+        assert self._base_image is not None, 'Base image is not set!'
         try:
             img = self._docker_client.images.list(name=f'mhagent:{agent.agent_id}')[0]
             if rebuild_image:
@@ -684,6 +718,8 @@ class Orchestrator:
         build_dir = agent_dir / 'tmp/'
         shutil.copytree(AGENT_IMG_PATH, build_dir.resolve())
         (build_dir / 'src').mkdir(parents=True, exist_ok=True)
+        assert mhagenta.__file__ is not None, 'Cannot locate mhagenta package!'
+        assert mhagenta.core.__file__ is not None, 'Cannot locate mhagenta.core package!'
         shutil.copy(Path(mhagenta.core.__file__).parent.resolve() / 'agent_launcher.py', (build_dir / 'src' / 'agent_launcher.py').resolve())
         shutil.copy(Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'start.sh', (build_dir / 'src' / 'start.sh').resolve())
 
@@ -698,33 +734,21 @@ class Orchestrator:
         if self._simulation_end_ts < end_estimate:
             self._simulation_end_ts = end_estimate
 
-        if 'init_script' in agent.kwargs:
-            init_script = agent.kwargs.pop('init_script')
-            shutil.copy(init_script, (build_dir / 'src' / 'init_script.sh').resolve())
-
-        if 'requirements_path' in agent.kwargs:
-            requirements_path = agent.kwargs.pop('requirements_path')
-            shutil.copy(requirements_path, (build_dir / 'src' / 'requirements.txt').resolve())
+        self._copy_extras(agent.kwargs, build_dir)
 
         with open((build_dir / 'src' / 'agent_params').resolve(), 'wb') as f:
             dill.dump(agent.kwargs, f, recurse=True)
 
-        base_tag = self._base_image.tags[0].split(':')
-        agent.image, _ = self._logged_build(path=str(build_dir.resolve()),
-                                            buildargs={
-                                                'SRC_IMAGE': base_tag[0],
-                                                'SRC_VERSION': base_tag[1]
-                                            },
-                                            tag=f'mhagent:{agent.agent_id}',
-                                            rm=True,
-                                            quiet=False
-                                            )
-        shutil.rmtree(build_dir)
+        self._docker_build(build_dir=build_dir,
+                           src_tag=self._base_image.tags[0].split(':'),
+                           tag=f'mhagent:{agent.agent_id}'
+                           )
 
     def _docker_build_env(self,
                           environment: EnvironmentEntry,
                           rebuild_image: bool = True,
                     ) -> None:
+        assert self._base_image is not None, 'Base image is not set!'
         try:
             img = self._docker_client.images.list(name=f'mhagent-env:{environment.env_id}')[0]
             if rebuild_image:
@@ -747,30 +771,31 @@ class Orchestrator:
         build_dir = env_dir / 'tmp/'
         shutil.copytree(AGENT_IMG_PATH, build_dir.resolve())
         (build_dir / 'src').mkdir(parents=True, exist_ok=True)
+        assert mhagenta.__file__ is not None, 'Cannot locate magenta package!'
+        assert mhagenta.environment.__file__ is not None, 'Cannot locate magenta.environment package!'
         shutil.copy(Path(mhagenta.environment.__file__).parent.resolve() / 'environment_launcher.py', (build_dir / 'src' / 'environment_launcher.py').resolve())
         shutil.copy(Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'env_start.sh', (build_dir / 'src' / 'start.sh').resolve())
 
-        if 'init_script' in environment.kwargs:
-            init_script = environment.kwargs.pop('init_script')
-            shutil.copy(init_script, (build_dir / 'src' / 'init_script.sh').resolve())
-
-        if 'requirements_path' in environment.kwargs:
-            requirements_path = environment.kwargs.pop('requirements_path')
-            shutil.copy(requirements_path, (build_dir / 'src' / 'requirements.txt').resolve())
+        self._copy_extras(environment.kwargs, build_dir)
 
         with open((build_dir / 'src' / 'env_params').resolve(), 'wb') as f:
             dill.dump(environment.kwargs, f, recurse=True)
 
+        self._docker_build(build_dir=build_dir,
+                           src_tag=self._base_image.tags[0].split(':'),
+                           tag=f'mhagent-env:{environment.env_id}'
+                           )
+
         base_tag = self._base_image.tags[0].split(':')
-        environment.image, build_logs = self._logged_build(path=str(build_dir.resolve()),
-                                                           buildargs={
-                                                               'SRC_IMAGE': base_tag[0],
-                                                               'SRC_VERSION': base_tag[1]
-                                                           },
-                                                           tag=f'mhagent-env:{environment.env_id}',
-                                                           rm=True,
-                                                           quiet=False
-                                                           )
+        environment.image, _ = self._logged_build(path=str(build_dir.resolve()),
+                                                  buildargs={
+                                                      'SRC_IMAGE': base_tag[0],
+                                                      'SRC_VERSION': base_tag[1]
+                                                  },
+                                                  tag=f'mhagent-env:{environment.env_id}',
+                                                  rm=True,
+                                                  quiet=False
+                                                  )
         shutil.rmtree(build_dir)
 
     async def _run_agent(self,
