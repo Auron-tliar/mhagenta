@@ -241,6 +241,7 @@ class MHAModule(MHAProcess):
             periodic=True,
             frequency=self._status_frequency
         )
+        self._wakeup()
 
     def _on_step_task(self) -> None:
         try:
@@ -267,6 +268,7 @@ class MHAModule(MHAProcess):
                 periodic=True,
                 frequency=self._step_frequency
             )
+            self._wakeup()
 
     def _on_first_step(self) -> None:
         try:
