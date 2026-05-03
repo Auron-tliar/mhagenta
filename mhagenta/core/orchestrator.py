@@ -5,11 +5,13 @@ import shutil
 import sys
 import time
 import warnings
+import inspect
+import sysconfig
 from asyncio import TaskGroup
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, ClassVar, cast
 from collections.abc import Iterable, Callable
 import functools
 import dateutil.parser
@@ -46,27 +48,36 @@ class AgentEntry:
     port_mapping: dict[int, int] | None = None
     num_copies: int = 1
     tags: Iterable[str] | None = None
+    extra_runtime_sources: tuple[Path, ...] = ()
+
+    _flat_modules: list[ModuleBase] = field(default_factory=list())
+
+    _MODULE_KEYS: ClassVar[tuple[str, ...]] = ('perceptors', 'actuators', 'll_reasoners', 'learners',
+                                               'knowledge', 'hl_reasoners', 'goal_graphs', 'memory')
+
+    @property
+    def modules(self) -> list[ModuleBase]:
+        if self._flat_modules:
+            return self._flat_modules
+
+        for key in self._MODULE_KEYS:
+            value = self.kwargs.get(key, None)
+            if value is None:
+                continue
+            if isinstance(value, ModuleBase):
+                self._flat_modules.append(value)
+            elif isinstance(value, Iterable):
+                for module in value:
+                    if not isinstance(module, ModuleBase):
+                        raise TypeError(f'Expected {key} to be a ModuleBase instance or a collection of them, got {type(module)}')
+                    self._flat_modules.append(module)
+            else:
+                raise TypeError(f'Expected {key} to be a ModuleBase instance or a collection of them, got {type(value)}')
+        return self._flat_modules
 
     @property
     def module_ids(self) -> list[str]:
-        module_ids = []
-        keys = ('perceptors',
-                'actuators',
-                'll_reasoners',
-                'learners',
-                'knowledge',
-                'hl_reasoners',
-                'goal_graphs',
-                'memory')
-        for key in keys:
-            if self.kwargs[key] is None:
-                continue
-            if isinstance(self.kwargs[key], Iterable):
-                for module in self.kwargs[key]:
-                    module_ids.append(module.module_id)
-            else:
-                module_ids.append(self.kwargs[key].module_id)
-        return module_ids
+        return [module.module_id for module in self.modules]
 
     def __hash__(self) -> int:
         return hash(self.agent_id)
@@ -76,6 +87,7 @@ class AgentEntry:
             return False
         return self.agent_id == other.agent_id
 
+
 @dataclass
 class EnvironmentEntry:
     env_id: str
@@ -83,10 +95,14 @@ class EnvironmentEntry:
     address: dict[str, Any]
     dir: Path | None = None
     tags: list[str] | None = None
-    # process: subprocess.Popen | None = None
     image: Image | None = None
     container: Container | None = None
     port_mapping: dict[int, int] | None = None
+    extra_runtime_sources: tuple[Path, ...] = ()
+
+    @property
+    def base(self) -> MHAEnvBase:
+        return self.kwargs['base']
 
     def __hash__(self) -> int:
         return hash(self.env_id)
@@ -339,7 +355,8 @@ class Orchestrator:
                         log_tags: list[str] | None = None,
                         log_level: int | str | None = None,
                         log_format: str | None = None,
-                        tags: Iterable[str] | None = None
+                        tags: Iterable[str] | None = None,
+                        extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None
                         ) -> None:
         """
         Add a configuration of an environment to build at the runtime.
@@ -362,6 +379,9 @@ class Orchestrator:
             log_level (int, optional): Log level; will use the Orchestrator's log level in None. Defaults to None.
             log_format (str, optional): Log format string; will use the Orchestrator's log format. Defaults to None.
             tags (Iterable[str], optional): List of tags for agent directory. Defaults to None.
+            extra_runtime_sources (os.PathLike | str | Iterable[os.PathLike | str], optional): Additional *local*
+                runtime sources to be added to the environment's execution context. Use `requirements_path` to add
+                third-party modules. Defaults to None.
 
         Returns:
 
@@ -408,7 +428,8 @@ class Orchestrator:
             },
             dir=env_dir,
             tags=tags,
-            port_mapping=port_mapping if port_mapping else self._port_mapping
+            port_mapping=port_mapping if port_mapping else self._port_mapping,
+            extra_runtime_sources=self._normalize_runtime_sources(extra_runtime_sources)
         )
 
     @staticmethod
@@ -446,7 +467,8 @@ class Orchestrator:
                   port_mapping: dict[int, int] | None = None,
                   connector_cls: type[Connector] | None = None,
                   connector_kwargs: dict[str, Any] | None = None,
-                  tags: Iterable[str] | None = None
+                  tags: Iterable[str] | None = None,
+                  extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None
                   ) -> None:
         """Define an agent model to be added to the execution.
 
@@ -493,6 +515,9 @@ class Orchestrator:
             connector_kwargs (dict[str, Any], optional): Additional keyword arguments for connector. Defaults to
                 the Orchestrator's `connector_kwargs`.
             tags (Iterable[str], optional): a list of tags associated with this agent for directory search.
+            extra_runtime_sources (os.PathLike | str | Iterable[os.PathLike | str], optional): Additional *local*
+                runtime sources to be added to the agent's execution context. Use `requirements_path` to add
+                third-party modules. Defaults to None.
 
         """
         if isinstance(actuators, Iterable):
@@ -543,7 +568,8 @@ class Orchestrator:
             port_mapping=port_mapping if port_mapping else self._port_mapping,
             num_copies=num_copies,
             kwargs=kwargs,
-            tags=tags
+            tags=tags,
+            extra_runtime_sources=self._normalize_runtime_sources(extra_runtime_sources)
         )
         if self._task_group is not None:
             self._task_group.create_task(self._run_agent(self._agents[agent_id], force_run=self._force_run))
@@ -736,6 +762,12 @@ class Orchestrator:
 
         self._copy_extras(agent.kwargs, build_dir)
 
+        runtime_sources: dict[str, Path] = dict()
+        src_dir = build_dir / 'src'
+
+        self._copy_runtime_python_modules(agent.modules, src_dir, runtime_sources)
+        self._copy_explicit_runtime_sources(agent.extra_runtime_sources, src_dir, runtime_sources)
+
         with open((build_dir / 'src' / 'agent_params').resolve(), 'wb') as f:
             dill.dump(agent.kwargs, f, recurse=True)
 
@@ -777,6 +809,12 @@ class Orchestrator:
         shutil.copy(Path(mhagenta.__file__).parent.resolve() / 'scripts' / 'env_start.sh', (build_dir / 'src' / 'start.sh').resolve())
 
         self._copy_extras(environment.kwargs, build_dir)
+
+        runtime_sources: dict[str, Path] = dict()
+        src_dir = build_dir / 'src'
+
+        self._copy_runtime_python_modules((environment.base,), src_dir, runtime_sources)
+        self._copy_explicit_runtime_sources(environment.extra_runtime_sources, src_dir, runtime_sources)
 
         with open((build_dir / 'src' / 'env_params').resolve(), 'wb') as f:
             dill.dump(environment.kwargs, f, recurse=True)
@@ -1040,3 +1078,113 @@ class Orchestrator:
                 remove=True,
                 tty=True
             )
+
+    @staticmethod
+    def _normalize_runtime_sources(sources: os.PathLike | str | Iterable[os.PathLike | str] | None) -> tuple[Path, ...]:
+        if sources is None:
+            return ()
+
+        if isinstance(sources, (str, os.PathLike)):
+            sources = (sources,)
+
+        normalized: list[Path] = list()
+        seen: set[Path] = set()
+
+        for src in sources:
+            path = Path(src).resolve()
+            if not path.exists():
+                raise FileNotFoundError(f'Runtime source path does not exist: "{path}"')
+            if path.is_dir():
+                if not path.name.isidentifier():
+                    raise ValueError(f'Runtime package directory name is not importable: "{path.name}"')
+                if not (path / '__init__.py').exists():
+                    raise ValueError(f'Runtime package directory must be a package root with __init__.py: "{path}"')
+            elif path.is_file():
+                if path.suffix != '.py':
+                    raise ValueError(f'Runtime source file must be a .py module: "{path}"')
+                if path.name == '__init__.py':
+                    raise ValueError(f'Pass the package directory instead of its __init__.py file: "{path}"')
+                if not path.stem.isidentifier():
+                    raise ValueError(f'Runtime package directory name is not importable: "{path.name}"')
+                if (path.parent / '__init__.py').exists():
+                    raise ValueError(f'Pass the package root, not a nested module: "{path}"')
+            else:
+                raise ValueError(f'Unsupported runtime source path: "{path}"')
+
+            if path not in seen:
+                normalized.append(path)
+                seen.add(path)
+
+        return tuple(normalized)
+
+    @staticmethod
+    def _module_source_root(module_name: str, module_file: Path) -> Path:
+        root = module_file.parent
+        steps_up = module_file.name.count('.') - 1
+        if module_file.name == '__init__.py':
+            steps_up += 1
+        for _ in range(steps_up):
+            root = root.parent
+        return root
+
+    @staticmethod
+    def _copy_runtime_sources(src: Path, dst_dir: Path, copied: dict[str, Path]) -> None:
+        dst = dst_dir / src.name
+
+        prev = copied.get(src.name)
+        if prev is not None:
+            if prev == src:
+                return
+            raise ValueError(f'Conflicting runtime sources targeting {src.name}: {prev} and {src}')
+
+        if dst.exists():
+            raise FileExistsError(f'Runtime source {src} would overwrite existing file: {dst}')
+
+        if src.is_dir():
+            shutil.copytree(src, dst)
+        else:
+            shutil.copy2(src, dst)
+
+        copied[src.name] = dst
+
+    @classmethod
+    def _copy_explicit_runtime_sources(cls, sources: Iterable[Path], dst_dir: Path, copied: dict[str, Path]) -> None:
+        for src in sources:
+            cls._copy_runtime_sources(src, dst_dir, copied)
+
+    def _copy_runtime_python_modules(self, objects: Iterable[Any], dst_dir: Path, copied: dict[str, Path]) -> None:
+        stdlib_dirs = {
+            Path(p).resolve() for p in (sysconfig.get_path('stdlib'), sysconfig.get_path('platstdlib')) if p
+        }
+        ignored_names = {'builtins', '__main__', '__mp_main__', 'mhagenta'}
+        venv_parts = {'site-packages', 'dist-packages', '.venv', 'venv'}
+
+        for obj in objects:
+            cls = obj if isinstance(obj, type) else type(obj)
+            module_name = cast(str, getattr(cls, '__module__', None))
+
+            if not module_name or module_name in ignored_names or module_name.startswith('mhagenta.'):
+                continue
+
+            module = inspect.getmodule(cls)
+            module_file_str = inspect.getsourcefile(cls) or getattr(module, '__file__', None)
+            if not module_file_str:
+                continue
+
+            module_file = Path(module_file_str).resolve()
+            parts = {part.lower() for part in module_file.parts}
+            if parts & venv_parts or any(p.startswith('.venv') or (p / 'pyvenv.cfg').exists() for p in parts):
+                continue
+            if any(module_file.is_relative_to(stdlib_dir) for stdlib_dir in stdlib_dirs):
+                continue
+
+            root = self._module_source_root(module_name, module_file)
+            top_name = module_name.split('.', 1)[0]
+
+            src = root / top_name
+            if not src.exists():
+                src = root / f'{top_name}.py'
+            if not src.exists():
+                raise FileNotFoundError(f'Could not resolve runtime source for module "{module_name}" from "{module_file}"')
+
+            self._copy_runtime_sources(src, dst_dir, copied)

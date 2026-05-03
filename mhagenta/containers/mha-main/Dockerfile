@@ -4,6 +4,7 @@ FROM ${SRC_IMAGE}:${SRC_VERSION}
 LABEL authors="Dmitry Gnatyshak"
 
 COPY src /agent/
+ENV PYTHONPATH="/agent:${PYTHONPATH}"
 RUN mkdir -p /out/logs
 RUN mkdir -p /out/save
 RUN if [ -e /agent/init_script.sh ] ; then sh /agent/init_script.sh ; fi
