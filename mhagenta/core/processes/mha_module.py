@@ -241,7 +241,6 @@ class MHAModule(MHAProcess):
             periodic=True,
             frequency=self._status_frequency
         )
-        self._wakeup()
 
     def _on_step_task(self) -> None:
         try:
@@ -257,6 +256,7 @@ class MHAModule(MHAProcess):
     def _run(self) -> None:
         self._stage = self.Stage.running
         self.info('Running...')
+        self._wakeup()
 
     async def on_run(self) -> None:
         self._report_status()
@@ -268,7 +268,6 @@ class MHAModule(MHAProcess):
                 periodic=True,
                 frequency=self._step_frequency
             )
-            self._wakeup()
 
     def _on_first_step(self) -> None:
         try:
