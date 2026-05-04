@@ -26,6 +26,8 @@ async def main() -> None:
     await env.initialize()
     await env.start()
 
+    print(f'Environment "{env.id}": execution finished.')
+
 
 if __name__ == '__main__':
     asyncio.run(main())

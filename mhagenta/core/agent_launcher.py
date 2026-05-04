@@ -24,6 +24,8 @@ async def main():
     await agent.initialize()
     await agent.start()
 
+    print(f'Agent "{agent.agent_id}": execution finished.')
+
 
 if __name__ == '__main__':
     print(f'Using MHAgentA version {importlib.metadata.version("mhagenta")}')
