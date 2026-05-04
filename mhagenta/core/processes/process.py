@@ -313,12 +313,12 @@ class MHAProcess(MHABase, ABC):
 
     async def stop(self, reason: str = 'USER COMMAND') -> None:
         self._stop_reason = reason
-        self.info(f'Stopping! Reason: {reason}.')
+        self.progress(f'Stopping! Reason: {reason}.')
         self._stage = self.Stage.stopping
         await self.on_stop()
         self._main_loop.cancel()
         self._stage = self.Stage.stopped
-        self.info('Stopped!')
+        self.progress('Stopped!')
 
     async def _loop(self) -> None:
         prev_stage = self._stage

@@ -118,18 +118,18 @@ class Memory(MHAModule):
         self.debug(f'Received observation update {msg.id} from {sender}. Processing...')
         observations = msg.body.pop('observations')
         update = self._base.on_observation_update(state=self._state, sender=sender, observations=observations, **msg.body)
-        self.log(5, f'Finished processing observation update {msg.id}!')
+        self.trace(f'Finished processing observation update {msg.id}!')
         return update
 
     def _receive_beliefs(self, sender: str, channel: str, msg: Message) -> MemoryState:
         self.debug(f'Received belief update {msg.id} from {sender}. Processing...')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_belief_update(state=self._state, sender=sender, beliefs=beliefs, **msg.body)
-        self.log(5, f'Finished processing belief update {msg.id}!')
+        self.trace(f'Finished processing belief update {msg.id}!')
         return update
 
     def _receive_memories_request(self, sender: str, channel: str, msg: Message) -> MemoryState:
         self.debug(f'Received memories request {msg.id} from {sender}. Processing...')
         update = self._base.on_memory_request(state=self._state, sender=sender, **msg.body)
-        self.log(5, f'Finished processing memories request {msg.id}!')
+        self.trace(f'Finished processing memories request {msg.id}!')
         return update

@@ -157,18 +157,18 @@ class Knowledge(MHAModule):
         observation = msg.body.pop('observation')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_observed_beliefs(state=self._state, sender=sender, observation=observation, beliefs=beliefs, **msg.body)
-        self.log(5, f'Finished processing observed belief update {msg.id}!')
+        self.trace(f'Finished processing observed belief update {msg.id}!')
         return update
 
     def _receive_beliefs(self, sender: str, channel: str, msg: Message) -> KnowledgeState:
         self.debug(f'Received belief update {msg.id} from {sender}. Processing...')
         beliefs = msg.body.pop('beliefs')
         update = self._base.on_belief_update(state=self._state, sender=sender, beliefs=beliefs, **msg.body)
-        self.log(5, f'Finished processing belief update {msg.id}!')
+        self.trace(f'Finished processing belief update {msg.id}!')
         return update
 
     def _receive_belief_request(self, sender: str, channel: str, msg: Message) -> KnowledgeState:
         self.debug(f'Received beliefs request {msg}. Processing...')
         update = self._base.on_belief_request(state=self._state, sender=sender, **msg.body)
-        self.log(5, f'Finished processing beliefs request {msg.id}!')
+        self.trace(f'Finished processing beliefs request {msg.id}!')
         return update

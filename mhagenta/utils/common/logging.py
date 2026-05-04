@@ -4,6 +4,11 @@ import logging
 
 
 DEFAULT_FORMAT = '[%(asctime)s|%(agent_time)f|%(mod_time)f|%(exec_time)s][%(levelname)s]::%(tags)s::%(message)s'
+PROGRESS: int = 15
+TRACE: int = 5
+
+logging.addLevelName(PROGRESS, 'PROGRESS')
+logging.addLevelName(TRACE, 'TRACE')
 
 
 class LoggerExtras(BaseModel):
@@ -30,8 +35,14 @@ class ILogging(ABC):
     def log(self, level: int, message: str) -> None:
         self._logger.log(level, message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())
 
+    def trace(self, message: str) -> None:
+        self.log(TRACE, message)
+
     def debug(self, message: str) -> None:
         self._logger.debug(message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())
+
+    def progress(self, message: str) -> None:
+        self.log(PROGRESS, message)
 
     def info(self, message: str) -> None:
         self._logger.info(message, extra=dict() if self._logger_extras is None else self._logger_extras.model_dump())

@@ -255,7 +255,7 @@ class MHAModule(MHAProcess):
 
     def _run(self) -> None:
         self._stage = self.Stage.running
-        self.info('Running...')
+        self.progress('Running...')
         self._wakeup()
 
     async def on_run(self) -> None:
@@ -293,7 +293,7 @@ class MHAModule(MHAProcess):
             raise ex
 
     async def on_stop(self) -> None:
-        self.info('Stopping')
+        self.progress('Stopping')
         self._on_last_step()
         await self._base._internal_stop()
 
@@ -307,7 +307,7 @@ class MHAModule(MHAProcess):
             return
         match cmd.cmd:
             case cmd.START:
-                self.info(f'Received {cmd.START} command (start ts: {cmd.args["start_ts"] if "start_ts" in cmd.args else "-"}, {(cmd.args["start_ts"] - self._time.system) if "start_ts" in cmd.args else "-"} seconds from now)')
+                self.progress(f'Received {cmd.START} command (start ts: {cmd.args["start_ts"] if "start_ts" in cmd.args else "-"}, {(cmd.args["start_ts"] - self._time.system) if "start_ts" in cmd.args else "-"} seconds from now)')
                 start_ts = cmd.args['start_ts'] if 'start_ts' in cmd.args else self._time.agent + self._time.system
 
                 self._time.set_exec_start_ts(start_ts)  # self._time.agent_start_ts +
@@ -322,7 +322,7 @@ class MHAModule(MHAProcess):
                 )
                 self._wakeup()
             case cmd.STOP:
-                self.info(f'Received {cmd.STOP} command (reason: {cmd.args["reason"]})')
+                self.progress(f'Received {cmd.STOP} command (reason: {cmd.args["reason"]})')
                 self._stage = self.Stage.stopping
                 self._stop_reason = cmd.args['reason']
                 self._wakeup()

@@ -80,5 +80,5 @@ class Actuator(MHAModule):
     def receive_request(self, sender: str, channel: str, msg: Message) -> ActuatorState:
         self.debug(f'Received action request {msg.id} from {sender}. Processing...')
         update = self._base.on_request(self._state, sender=sender, **msg.body)
-        self.log(5, f'Finished processing action request {msg.id}!')
+        self.trace(f'Finished processing action request {msg.id}!')
         return update

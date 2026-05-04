@@ -146,7 +146,7 @@ class MHAEnvironment(MHABase, ABC):
         pass
 
     async def stop(self) -> None:
-        self.log(logging.INFO, 'Stopping environment...')
+        self.progress('Stopping environment...')
         await self.on_stop()
         if self._save_dir is not None:
             self.log(logging.DEBUG, 'Saving environment state before exiting...')
