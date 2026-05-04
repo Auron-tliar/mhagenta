@@ -217,7 +217,7 @@ class Orchestrator:
     to define default parameters shared by all the agents handles by it (can be overridden by individual agents)
 
     """
-    SAVE_SUBDIR = 'out/save'
+    SAVE_SUBDIR = 'out'
     LOG_CHECK_FREQ = 1.
 
     TRACE: int = 5
