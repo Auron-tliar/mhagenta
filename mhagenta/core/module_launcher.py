@@ -48,4 +48,4 @@ if __name__ == "__main__":
 
     exit_reason = asyncio.run(run_agent_module(module_cls, **params))
 
-    print(f'Module {params["base"].module_id} exited, reason: {exit_reason}')
+    # print(f'Module {params["base"].module_id} exited, reason: {exit_reason}')
