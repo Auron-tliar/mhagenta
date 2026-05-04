@@ -94,7 +94,7 @@ class AgentTime:
         """Agent time in seconds.
 
         Returns:
-            float: Seconds since the agent was created (i.e. since the initialization of agent's root controller).
+            float: Seconds since the agent was launched (i.e., since the initialization of agent's root controller).
 
         """
         return round(time.time() - self._agent_start_ts, self._decimals)
@@ -120,7 +120,7 @@ class AgentTime:
 
     @property
     def agent_start_ts(self) -> float:
-        """Unix timestamp in seconds of when the synchronous agents execution start.
+        """Unix timestamp in seconds of when the agent launched.
 
         Returns:
             float: Unix timestamp in seconds.
@@ -394,6 +394,7 @@ class EDirectory(BaseDirectory):
     Directory of all the external entities Orchestrator was aware of during the launch.
     """
     ENVIRONMENT = 'environment'
+    AGENT = 'agent'
     localhost_win = 'host.docker.internal'
     localhost_linux = 'http://172.17.0.1'
 
@@ -412,10 +413,7 @@ class EDirectory(BaseDirectory):
         # super().__init__([env_card])
 
     def add_env(self, env_id: str, address: dict[str, Any], tags: Iterable[str] | None = None) -> ECard:
-        if tags is None:
-            tags = list()
-        else:
-            tags = list(tags)
+        tags = list() if tags is None else list(tags)
         if self.ENVIRONMENT not in tags:
             tags.append(self.ENVIRONMENT)
         card = ECard(env_id, address, tags)
@@ -423,6 +421,9 @@ class EDirectory(BaseDirectory):
         return card
 
     def add_agent(self, agent_id: str, address: Any, tags: Iterable[str] | None = None) -> ECard:
+        tags = list() if tags is None else list(tags)
+        if self.AGENT not in tags:
+            tags.append(self.AGENT)
         card = ECard(agent_id, address, tags)
         self._add(card)
         return card
@@ -441,6 +442,10 @@ class EDirectory(BaseDirectory):
     def environment(self) -> ECard | None:
         envs = self.environments
         return envs[0] if envs else None
+
+    @property
+    def agents(self) -> list[ECard]:
+        return self.search([self.AGENT])
 
     def __str__(self) -> str:
         return f'Directory(\n\t{'\n\t'.join([str(card) for card in self._content])})'
@@ -792,3 +797,8 @@ class State[T: Outbox]:
 
     def __repr__(self) -> str:
         return str(self.dump())
+
+    def __getitem__(self, item: str) -> Any:
+        if item not in self._custom_fields:
+            raise KeyError(f'Unknown state field: {item}')
+        return self.__dict__[item]
