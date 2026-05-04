@@ -136,12 +136,18 @@ class LogParser:
         def __eq__(self, other: 'LogParser.LogEntry') -> bool:
             return self.ts == other.ts
 
-    def __init__(self, stop_checker: Callable[[], bool], check_freq: float = 1., save_logs: os.PathLike | str | None = None) -> None:
-        # self._containers: list[AgentEntry | EnvironmentEntry] = list()
+    def __init__(
+            self,
+            stop_checker: Callable[[], bool],
+            check_freq: float = 1.,
+            save_logs: os.PathLike | str | None = None,
+            no_stdout: bool = False
+    ) -> None:
         self._sources: dict[AgentEntry | EnvironmentEntry, LogParser.SourceInfo] = dict()
         self._check_freq: float = check_freq
         self._stop_checker: Callable[[], bool] = stop_checker
         self._save_logs: Path | None = Path(save_logs) if save_logs else None
+        self._stdout: bool = not no_stdout
 
         self._init_ts = datetime.now()
 
@@ -157,12 +163,13 @@ class LogParser:
         )
 
     @staticmethod
-    def _add_log(log: str | bytes, save_path: Path | None = None) -> None:
+    def _add_log(log: str | bytes, save_path: Path | None = None, print_to_stdout: bool = True) -> None:
         if isinstance(log, bytes):
             log = log.decode().strip('\n\r')
         if '[status_upd]' in log:
             return
-        print(log)
+        if print_to_stdout:
+            print(log)
         if save_path is not None:
             with open(save_path, 'a') as f:
                 f.write(f'{log}\n')
@@ -187,7 +194,7 @@ class LogParser:
                     info.last_ts = ts
             logs.sort()
             for entry in logs:
-                self._add_log(entry.msg, save_path=entry.source.path)
+                self._add_log(entry.msg, save_path=entry.source.path, print_to_stdout=self._stdout)
             logs.clear()
             await asyncio.sleep(self._check_freq)
 
@@ -233,7 +240,8 @@ class Orchestrator:
             mas_rmq_uri: str | Literal['default'] | None = None,
             mas_rmq_close_on_exit: bool = True,
             mas_rmq_exchange_name: str | None = None,
-            save_logs: bool = True
+            save_logs: bool = True,
+            no_stdout_logs: bool = False
     ) -> None:
         """
         Constructor method for Orchestrator.
@@ -278,6 +286,7 @@ class Orchestrator:
                 Defaults to 'mhagenta'.
             save_logs (bool, optional, default=True): Whether to save agent logs. If True, saves each agent's logs to
                 `<agent_id>.log` at the root of the `save_dir`. Defaults to True.
+            no_stdout_logs (bool, optional, default=False): Whether to suppress stdout logs. Defaults to False.
         """
         if os.name != 'nt' and os.name != 'posix':
             raise RuntimeError(f'OS {os.name} is not supported.')
@@ -350,7 +359,8 @@ class Orchestrator:
         self._log_parser = LogParser(
             stop_checker=lambda: self._stopping and self._agents_stopped,
             check_freq=1.,
-            save_logs=self._save_dir if save_logs else None
+            save_logs=self._save_dir if save_logs else None,
+            no_stdout=no_stdout_logs
         )
 
     def add_environment(
