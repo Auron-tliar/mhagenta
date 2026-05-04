@@ -220,6 +220,14 @@ class Orchestrator:
     SAVE_SUBDIR = 'out/save'
     LOG_CHECK_FREQ = 1.
 
+    TRACE: int = 5
+    DEBUG: int = 10
+    PROGRESS: int = 15
+    INFO: int = 20
+    WARNING: int = 30
+    ERROR: int = 40
+    CRITICAL: int = 50
+
     def __init__(
             self,
             save_dir: str | os.PathLike,
@@ -756,7 +764,10 @@ class Orchestrator:
                 raise ValueError(f'Image {spec.image_tag} is not found!')
 
         assert self._base_image is not None, 'Base image is not set!'
-        base_image_tag = sorted(cast(list[str], self._base_image.tags))[-1]
+        base_image_tags = cast(list[str], self._base_image.tags)
+        if len(base_image_tags) > 1:
+            base_image_tags[:] = [t for t in base_image_tags if not t.endswith('latest')]
+        base_image_tag = sorted(base_image_tags, key=lambda t: len(t))[-1]
         print(f'===== BUILDING {spec.display_name} IMAGE: {spec.image_tag} FROM {base_image_tag} =====')
 
         if self._force_run and out_dir.exists():
