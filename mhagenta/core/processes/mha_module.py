@@ -264,7 +264,7 @@ class MHAModule(MHAProcess):
         if not self._base.is_reactive:
             self._queue.push(
                 func=self._on_step_task,
-                ts=self._time.agent,
+                ts=self._time.exec_start_ts - self._time.agent_start_ts,  # self._time.agent,
                 periodic=True,
                 frequency=self._step_frequency
             )
