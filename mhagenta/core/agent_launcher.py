@@ -24,9 +24,10 @@ async def main():
     await agent.initialize()
     await agent.start()
 
-    print(f'Agent "{agent.agent_id}": execution finished.')
+    print(f'[{os.environ['DOCKER_NAME']}] Agent "{agent.agent_id}": execution finished.')
 
 
 if __name__ == '__main__':
-    print(f'Using MHAgentA version {importlib.metadata.version("mhagenta")}')
+    if os.environ['VERBOSE'] == 'true':
+        print(f'[{os.environ['DOCKER_NAME']}] Using MHAgentA version {importlib.metadata.version("mhagenta")}')
     asyncio.run(main())

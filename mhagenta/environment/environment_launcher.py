@@ -2,12 +2,7 @@ import os
 import dill
 import asyncio
 from typing import Any
-import importlib.metadata
 from pathlib import Path
-from os import PathLike
-import sys
-import signal
-import functools
 
 from mhagenta.environment import MHAEnvironment
 
@@ -26,7 +21,7 @@ async def main() -> None:
     await env.initialize()
     await env.start()
 
-    print(f'Environment "{env.id}": execution finished.')
+    print(f'[{os.environ['DOCKER_NAME']}] Environment "{env.id}": execution finished.')
 
 
 if __name__ == '__main__':

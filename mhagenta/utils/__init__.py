@@ -2,7 +2,7 @@ from mhagenta.utils.common import State, Belief, Goal, Observation, ActionStatus
 
 
 DEFAULT_PORT = 61200
-DEFAULT_RMQ_IMAGE = 'rabbitmq:4.0-management'
+DEFAULT_RMQ_IMAGE = 'rabbitmq:4.3-management'
 
 
 __all__ = [

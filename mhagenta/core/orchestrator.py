@@ -43,7 +43,7 @@ class Entry:
     dir: Path | None = None
     tags: Iterable[str] | None = None
     image: Image | None = None
-    container: Container | None = None
+    containers: dict[str, Container] | None = None
     port_mapping: dict[int, int] | None = None
     script_path: Path | None = None
     requirements_path: Path | None = None
@@ -122,6 +122,7 @@ class LogParser:
     class SourceInfo:
         last_ts: datetime
         path: Path | None = None
+        container: Container | None = None
 
     @functools.total_ordering
     @dataclass
@@ -143,7 +144,7 @@ class LogParser:
             save_logs: os.PathLike | str | None = None,
             no_stdout: bool = False
     ) -> None:
-        self._sources: dict[AgentEntry | EnvironmentEntry, LogParser.SourceInfo] = dict()
+        self._sources: dict[str, LogParser.SourceInfo] = dict()
         self._check_freq: float = check_freq
         self._stop_checker: Callable[[], bool] = stop_checker
         self._save_logs: Path | None = Path(save_logs) if save_logs else None
@@ -152,15 +153,24 @@ class LogParser:
         self._init_ts = datetime.now()
 
     def add_container(self, source: AgentEntry | EnvironmentEntry) -> None:
-        sid: str
+        sids: list[str]
         if isinstance(source, EnvironmentEntry):
-            sid = source.env_id
+            sids = [source.env_id]
+        elif isinstance(source, AgentEntry):
+            assert source.containers
+            if len(source.containers) == 1:
+                sids = [source.agent_id]
+            else:
+                sids = list(source.containers.keys())
         else:
-            sid = source.agent_id
-        self._sources[source] = self.SourceInfo(
-            last_ts=self._init_ts,
-            path=(self._save_logs / f'{sid}.log') if self._save_logs is not None else None
-        )
+            raise ValueError('Cannot use general Entry with the LogParser!')
+
+        for sid in sids:
+            self._sources[sid] = self.SourceInfo(
+                last_ts=self._init_ts,
+                path=(self._save_logs / f'{sid}.log') if self._save_logs is not None else None,
+                container=source.containers[sid]
+            )
 
     @staticmethod
     def _add_log(log: str | bytes, save_path: Path | None = None, print_to_stdout: bool = True) -> None:
@@ -181,8 +191,9 @@ class LogParser:
         while True:
             if self._stop_checker():
                 break
-            for source, info in self._sources.items():
-                raw_log = source.container.logs(stdout=True, stderr=True, tail='all', timestamps=True, since=(info.last_ts + self.US).timestamp())
+            for sid, info in self._sources.items():
+                assert info.container is not None
+                raw_log = info.container.logs(stdout=True, stderr=True, tail='all', timestamps=True, since=(info.last_ts + self.US).timestamp())
                 log_lines = raw_log.decode('utf-8').strip().split('\n')
                 for log in log_lines:
                     if not log.strip():
@@ -365,7 +376,7 @@ class Orchestrator:
         self._all_stopped = False
 
         self._log_parser = LogParser(
-            stop_checker=lambda: self._stopping and self._agents_stopped,
+            stop_checker=lambda: self._stopping and self._containers_stopped,
             check_freq=1.,
             save_logs=self._save_dir if save_logs else None,
             no_stdout=no_stdout_logs
@@ -374,7 +385,7 @@ class Orchestrator:
     def add_environment(
             self,
             base: MHAEnvBase,
-            env_id: str = "environment",
+            env_id: str = 'environment',
             host: str | None = 'localhost',
             port: int | None = 5672,
             exec_duration: float | None = None,
@@ -428,13 +439,18 @@ class Orchestrator:
         env_dir.mkdir(parents=True, exist_ok=True)
         if tags is not None:
             tags = list(tags)
+        exec_duration = exec_duration if exec_duration else self._exec_duration_sec
+        if self._agent_start_delay is not None and self._agent_start_delay > 0:
+            exec_duration += self._agent_start_delay
+        elif self._exec_start_time is not None and self._exec_start_time > 0:
+            exec_duration += (self._exec_start_time - time.time())
         kwargs = {
             'env_class': RMQEnvironment,
             'base': base,
             'env_id': env_id,
             'host': host if host != 'localhost' and host != '127.0.0.1' else 'host.docker.internal',
             'port': port,
-            'exec_duration': (exec_duration if exec_duration else self._exec_duration_sec) + self._agent_start_delay,
+            'exec_duration': exec_duration,
             'exchange_name': exchange_name if exchange_name is not None else self._mas_rmq_exchange_name,
             'start_time_reference': None,
             'save_dir': f'/{self.SAVE_SUBDIR}',
@@ -471,6 +487,15 @@ class Orchestrator:
             return
         if conn_params['host'] == 'localhost':
             conn_params['host'] = EDirectory.localhost_linux if sys.platform == 'linux' else EDirectory.localhost_win
+
+    @staticmethod
+    def _try_extend_ids(modules: Iterable[ModuleBase] | None, module_ids: set[str]) -> None:
+        if modules is None:
+            return
+        for module in modules:
+            if module.module_id in module_ids:
+                raise ValueError(f'Found a duplicate module ID {module.module_id}!')
+            module_ids.add(module.module_id)
 
     def add_agent(
             self,
@@ -550,17 +575,46 @@ class Orchestrator:
                 third-party modules. Defaults to None.
 
         """
-        if isinstance(actuators, Iterable):
-            for actuator in actuators:
-                self._update_external_host(actuator)
-        else:
-            self._update_external_host(actuators)
+        if agent_id in self._agents:
+            raise KeyError(f'Agent with ID "{agent_id}" already exists!')
 
-        if isinstance(perceptors, Iterable):
-            for perceptor in perceptors:
-                self._update_external_host(perceptor)
-        else:
-            self._update_external_host(perceptors)
+        module_ids: set[str] = set()
+
+        if isinstance(perceptors, PerceptorBase):
+            perceptors = [perceptors]
+        if isinstance(actuators, ActuatorBase):
+            actuators = [actuators]
+        if isinstance(ll_reasoners, LLReasonerBase):
+            ll_reasoners = [ll_reasoners]
+        if isinstance(knowledge, KnowledgeBase):
+            knowledge = [knowledge]
+        if isinstance(hl_reasoners, HLReasonerBase):
+            hl_reasoners = [hl_reasoners]
+        if isinstance(goal_graphs, GoalGraphBase):
+            goal_graphs = [goal_graphs]
+        if isinstance(memory, MemoryBase):
+            memory = [memory]
+        if isinstance(learners, LearnerBase):
+            learners = [learners]
+
+        for perceptor in perceptors:
+            if perceptor.module_id in module_ids:
+                raise ValueError(f'Found duplicate module ID {perceptor.module_id}!')
+            module_ids.add(perceptor.module_id)
+            self._update_external_host(perceptor)
+
+        for actuator in actuators:
+            if actuator.module_id in module_ids:
+                raise ValueError(f'Found duplicate module ID {actuator.module_id}!')
+            module_ids.add(actuator.module_id)
+            self._update_external_host(actuator)
+
+        self._try_extend_ids(ll_reasoners, module_ids)
+        self._try_extend_ids(knowledge, module_ids)
+        self._try_extend_ids(hl_reasoners, module_ids)
+        self._try_extend_ids(goal_graphs, module_ids)
+        self._try_extend_ids(memory, module_ids)
+        self._try_extend_ids(learners, module_ids)
 
         kwargs = {
             'agent_id': agent_id,
@@ -621,16 +675,21 @@ class Orchestrator:
             )
 
         for agent in self._agents.values():
-            directory.external.add_agent(
-                agent_id=agent.agent_id,
-                address={
-                    'exchange_name': self._mas_rmq_exchange_name,
-                    'agent_id': agent.agent_id,
-                    'host': host,
-                    'port': port
-                },
-                tags=agent.tags
-            )
+            if agent.num_copies == 1:
+                agent_ids = [agent.agent_id]
+            else:
+                agent_ids = [f'{agent.agent_id}_{i}' for i in range(agent.num_copies)]
+            for agent_id in agent_ids:
+                directory.external.add_agent(
+                    agent_id=agent_id,
+                    address={
+                        'exchange_name': self._mas_rmq_exchange_name,
+                        'agent_id': agent_id,
+                        'host': host,
+                        'port': port
+                    },
+                    tags=agent.tags
+                )
         return directory
 
     def _docker_build_base(
@@ -687,8 +746,8 @@ class Orchestrator:
                             buildargs={
                                 'SRC_IMAGE': REPO,
                                 'SRC_TAG': 'rmq',
-                                'PRE_VERSION': "true" if prerelease else "false",
-                                'LOCAL': "false" if local_build is None else "true",
+                                'PRE_VERSION': 'true' if prerelease else 'false',
+                                'LOCAL': 'false' if local_build is None else 'true',
                             },
                             tag=f'{REPO}:{mhagenta_version}',
                             rm=True,
@@ -773,7 +832,7 @@ class Orchestrator:
         if self._force_run and out_dir.exists():
             shutil.rmtree(out_dir)
 
-        (out_dir / 'out').mkdir(parents=True)
+        (out_dir / self.SAVE_SUBDIR).mkdir(parents=True)
         build_dir = out_dir / 'tmp/'
 
         shutil.copytree(AGENT_IMG_PATH, build_dir.resolve())
@@ -809,7 +868,7 @@ class Orchestrator:
 
         agent_dir = self._save_dir.resolve() / agent.agent_id
         agent.dir = agent_dir
-        agent.save_dir = agent_dir / 'out'
+        agent.save_dir = agent_dir / self.SAVE_SUBDIR
 
         params = agent.kwargs.copy()
         params['directory'] = self._compose_directory()
@@ -848,6 +907,7 @@ class Orchestrator:
         env_dir = self._save_dir.resolve() / environment.env_id
         environment.dir = env_dir
         params = environment.kwargs.copy()
+        params['exec_duration'] += (self._start_time - time.time())
 
         spec = BuildSpec(
             image_tag=f'mhagent-env:{environment.env_id}',
@@ -877,13 +937,14 @@ class Orchestrator:
         else:
             print(f'===== RUNNING AGENT IMAGE \"mhagent:{agent.agent_id}\" AS '
                   f'{agent.num_copies} CONTAINERS \"{agent.agent_id}_#\" =====')
+        agent.containers = dict()
         for i in range(agent.num_copies):
             if agent.num_copies == 1:
                 agent_name = agent.agent_id
-                agent_dir = (agent.dir / "out").resolve()
+                agent_dir = (agent.dir / self.SAVE_SUBDIR).resolve()
             else:
                 agent_name = f'{agent.agent_id}_{i}'
-                agent_dir = (agent.dir / str(i) / "out").resolve()
+                agent_dir = (agent.dir.with_name(agent_name) / self.SAVE_SUBDIR).resolve()
 
             agent_dir.mkdir(parents=True, exist_ok=True)
             try:
@@ -895,17 +956,31 @@ class Orchestrator:
             except NotFound:
                 pass
 
-            agent.container = self._docker_client.containers.run(
+            if self._mas_rmq_uri_internal is not None:
+                host, port = self._mas_rmq_uri_internal.split(':')
+                port = int(port) + 10_000
+            else:
+                host, port = None, None
+
+            assert agent.containers is not None
+            agent.containers[agent_name] = self._docker_client.containers.run(
                 image=agent.image,
                 detach=True,
                 name=agent_name,
-                environment={"AGENT_ID": agent_name},
+                environment={
+                    'AGENT_ID': agent_name,
+                    'DOCKER_NAME': agent_name,
+                    'RMQ_HOST': host,
+                    'RMQ_PORT': port,
+                    'VERBOSE': "true" if self._log_level <= self.PROGRESS else "false"
+                },
                 volumes={
-                    str(agent_dir): {'bind': '/out', 'mode': 'rw'}
+                    str(agent_dir): {'bind': f'/{self.SAVE_SUBDIR}', 'mode': 'rw'}
                 },
                 extra_hosts={'host.docker.internal': 'host-gateway'},
                 ports=agent.port_mapping
             )
+        self._log_parser.add_container(agent)
 
     async def _run_env(
             self,
@@ -914,7 +989,7 @@ class Orchestrator:
     ) -> None:
         print(f'===== RUNNING ENVIRONMENT IMAGE \"mhagent-env:{environment.env_id}\" AS CONTAINER \"{environment.env_id}\" =====')
 
-        env_dir = (environment.dir / "out").resolve()
+        env_dir = (environment.dir / self.SAVE_SUBDIR).resolve()
         env_dir.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -926,17 +1001,29 @@ class Orchestrator:
         except NotFound:
             pass
 
-        environment.container = self._docker_client.containers.run(
+        if self._mas_rmq_uri_internal is not None:
+            host, port = self._mas_rmq_uri_internal.split(':')
+            port = int(port) + 10_000
+        else:
+            host, port = None, None
+        environment.containers = {environment.env_id: self._docker_client.containers.run(
             image=environment.image,
             detach=True,
             name=environment.env_id,
-            environment={"AGENT_ID": ''},
+            environment={
+                'AGENT_ID': '',
+                'DOCKER_NAME': environment.env_id,
+                'RMQ_HOST': host,
+                'RMQ_PORT': port,
+                'VERBOSE': "true" if self._log_level <= self.PROGRESS else "false"
+            },
             volumes={
-                str(env_dir): {'bind': '/out', 'mode': 'rw'}
+                str(env_dir): {'bind': f'/{self.SAVE_SUBDIR}', 'mode': 'rw'}
             },
             extra_hosts={'host.docker.internal': 'host-gateway'},
             ports=environment.port_mapping
-        )
+        )}
+        self._log_parser.add_container(environment)
 
     async def arun(
             self,
@@ -973,6 +1060,9 @@ class Orchestrator:
         """
 
         self._start_time = time.time()
+
+        # print(f'[Orchestrator] Starting execution at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+
         if self._base_image is None:
             self._docker_build_base(mhagenta_version=mhagenta_version, local_build=local_build, prerelease=prerelease)
 
@@ -997,24 +1087,26 @@ class Orchestrator:
             #     tg.create_task(self._read_logs())
             tg.create_task(self._simulation_end_timer())
             for env in self._environments.values():
-                env.kwargs['exec_duration'] -= (time.time() - self._start_time)
                 tg.create_task(self._run_env(env, force_run=force_run))
                 # tg.create_task(self._read_logs(env, gui=False))
-                self._log_parser.add_container(env)
+                # self._log_parser.add_container(env)
             for agent in self._agents.values():
                 tg.create_task(self._run_agent(agent, force_run=force_run))
                 # tg.create_task(self._read_logs(agent, gui))
-                self._log_parser.add_container(agent)
+                # self._log_parser.add_container(agent)
             tg.create_task(self._log_parser.run())
         self._running = False
         for agent in self._agents.values():
-            agent.container.stop()
-            if not keep_containers:
-                agent.container.remove()
+            assert agent.containers is not None
+            for container in agent.containers.values():
+                container.stop()
+                if not keep_containers:
+                    container.remove()
         for env in self._environments.values():
-            env.container.stop()
+            assert env.containers is not None
+            env.containers[env.env_id].stop()
             if not keep_containers:
-                env.container.remove()
+                env.containers[env.env_id].remove()
         if self._mas_rmq_container is not None and self._mas_rmq_close_on_exit:
             try:
                 self._mas_rmq_container.stop()
@@ -1068,12 +1160,22 @@ class Orchestrator:
 
     @staticmethod
     def _agent_stopped(agent: AgentEntry | EnvironmentEntry) -> bool:
-        assert agent.container is not None, 'Container is not set!'
-        agent.container.reload()
-        return agent.container.status == 'exited'
+        assert agent.containers is not None, 'Agent containers are not set!'
+        for container in agent.containers.values():
+            container.reload()
+        return all([container.status == 'exited' for container in agent.containers.values()])
 
     @property
     def _agents_stopped(self) -> bool:
+        if self._all_stopped:
+            return True
+        for agent in self._agents.values():
+            if not self._agent_stopped(agent):
+                return False
+        return True
+
+    @property
+    def _containers_stopped(self) -> bool:
         if self._all_stopped:
             return True
         for agent in self._agents.values():
@@ -1086,6 +1188,8 @@ class Orchestrator:
         return True
 
     async def _simulation_end_timer(self) -> None:
+        # print(f'[Orchestrator] Simulation end time: {datetime.fromtimestamp(self._simulation_end_ts).strftime("%Y-%m-%d %H:%M:%S")} '
+        #       f'(in {self._simulation_end_ts - time.time():.3f}) seconds).')
         await asyncio.sleep(self._simulation_end_ts - time.time())
         self._stopping = True
 

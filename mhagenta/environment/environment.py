@@ -137,8 +137,6 @@ class MHAEnvironment(MHABase, ABC):
 
     async def _timeout(self) -> None:
         await asyncio.sleep(self._exec_duration)
-
-        self.log(logging.INFO, f'Execution timeout, {'saving the state and ' if self._save_dir is not None else ''}exiting...')
         await self.stop()
 
     @abstractmethod
@@ -187,7 +185,7 @@ class MHAEnvironment(MHABase, ABC):
                 ts=self.time.agent,
                 performative=Performatives.INFORM
             )
-            self.send_response(recipient_id=sender, channel=channel, msg=msg)
+            self.send_response(recipient_id=sender, channel=f'observations', msg=msg)
         except Exception as ex:
             self.warning(f'Caught exception \"{ex}\" while processing observation request {msg.short_id} from {sender})!'
                          f' Aborting processing and attempting to resume execution...')
@@ -208,7 +206,7 @@ class MHAEnvironment(MHABase, ABC):
                     ts=self.time.agent,
                     performative=Performatives.INFORM
                 )
-                self.send_response(recipient_id=sender, channel=channel, msg=msg)
+                self.send_response(recipient_id=sender, channel=f'act_status', msg=msg)
         except Exception as ex:
             self.warning(f'Caught exception \"{ex}\" while processing action {msg.short_id} from {sender})!'
                          f' Aborting processing and attempting to resume execution...')

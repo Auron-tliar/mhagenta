@@ -53,6 +53,9 @@ class RMQEnvironment(MHAEnvironment):
             external_exchange_name=exchange_name,
         )
 
+        self._registered_out_keys = set()
+        self._tmp_pending_out: dict[str, list[Message]] = {}
+
     async def initialize(self) -> None:
         await self._connector.initialize()
         await self._connector.subscribe_to_in_channel(
@@ -72,8 +75,31 @@ class RMQEnvironment(MHAEnvironment):
         await self._connector.stop()
 
     def send_response(self, recipient_id: str, channel: str, msg: Message, **kwargs) -> None:
+        routing_key = f'{recipient_id}::{channel}'
+        if routing_key not in self._registered_out_keys:
+            if routing_key not in self._tmp_pending_out:
+                assert self._main_task_group is not None, 'Main task group not set'
+                self._tmp_pending_out[routing_key] = [msg]
+                # self._main_task_group.create_task(self._connector.register_out_channel('', routing_key))
+                self._main_task_group.create_task(self._register_out_and_send(routing_key))
+            else:
+                self._tmp_pending_out[routing_key].append(msg)
+            return
+
         self._connector.send(
-            recipient=recipient_id,
+            recipient=f'{recipient_id}::{channel}',
             channel='',
             msg=msg
         )
+
+    async def _register_out_and_send(self,  routing_key: str) -> None:
+        await self._connector.register_out_channel('', routing_key)
+        self._registered_out_keys.add(routing_key)
+
+        for msg in self._tmp_pending_out.get(routing_key, []):
+            self._connector.send(
+                recipient=routing_key,
+                channel='',
+                msg=msg
+            )
+        del self._tmp_pending_out[routing_key]

@@ -185,7 +185,7 @@ class RMQPerceptorBase(PerceptorBase):
         await self._connector.initialize()
         await self._connector.subscribe_to_in_channel(
             sender='',
-            channel=self._agent_id,
+            channel=f'{self._agent_id}::observations',
             callback=self._on_observation_callback
         )
         await self._connector.register_out_channel(
@@ -279,7 +279,7 @@ class RMQActuatorBase(ActuatorBase):
         await self._connector.initialize()
         await self._connector.subscribe_to_in_channel(
             sender='',
-            channel=self._agent_id,
+            channel=f'{self._agent_id}::act_status',
             callback=self._on_status_callback
         )
         await self._connector.register_out_channel(
