@@ -249,7 +249,7 @@ class MHAModule(MHAProcess):
             update = self._step_action(self._state)
             self._process_update(update)
         except Exception as ex:
-            self.warning(f'Caught exception \"{ex}\" while running the step action {self._step_counter}!'
+            self.warning(f'Caught exception \"{type(ex)}({ex})\" while running the step action {self._step_counter}!'
                          f' Aborting step action {self._step_counter} and attempting to resume execution...')
             raise ex
 
@@ -277,7 +277,7 @@ class MHAModule(MHAProcess):
             self._process_update(update)
             self._wakeup()
         except Exception as ex:
-            self.warning(f'Caught exception \"{ex}\" while running the first (pre) step action!'
+            self.warning(f'Caught exception \"{type(ex)}({ex})\" while running the first (pre) step action!'
                          f' Aborting and attempting to resume execution...')
             raise ex
 
@@ -288,7 +288,7 @@ class MHAModule(MHAProcess):
             update = self._base.on_last(self._state)
             self._process_update(update)
         except Exception as ex:
-            self.warning(f'Caught exception \"{ex}\" while running the last (post) step action!'
+            self.warning(f'Caught exception \"{type(ex)}({ex})\" while running the last (post) step action!'
                          f' Aborting and attempting to resume execution...')
             raise ex
 
@@ -345,7 +345,7 @@ class MHAModule(MHAProcess):
                     update = callback(sender, channel, msg)
                     self._process_update(update)
                 except Exception as ex:
-                    self.warning(f'Caught exception \"{ex}\" while processing message {msg.short_id} from {sender} (channel: {channel})!'
+                    self.warning(f'Caught exception \"{type(ex)}({ex})\" while processing message {msg.short_id} from {sender} (channel: {channel})!'
                                  f' Aborting message processing and attempting to resume execution...')
                     raise ex
             self._queue.push(
@@ -367,7 +367,10 @@ class MHAModule(MHAProcess):
     def _process_outbox(self) -> None:
         for receiver, performative, extension, content in self._state.outbox:
             self.debug(f'SENDING {performative.capitalize()}{f"/{extension}" if extension else ""} TO {receiver}: {content}...')
-            self._send(receiver, performative, extension, content)
+            try:
+                self._send(receiver, performative, extension, content)
+            except KeyError as ex:
+                self.warning(f'Could not send message to {receiver} (channel: {self.sender_channel(receiver, performative, extension)})! Reason: KeyError({ex})!')
         self._state.outbox.clear()
 
     def _send(self, recipient: str, performative: str, extension: str, content: dict[str, Any]) -> None:

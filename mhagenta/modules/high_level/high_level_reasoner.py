@@ -1,5 +1,5 @@
 from typing import ClassVar, Any
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Goal, Belief, State
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
@@ -96,14 +96,14 @@ class HLReasonerBase(ModuleBase):
     """
     module_type: ClassVar[str] = ModuleTypes.HLREASONER
 
-    def on_belief_update(self, state: HLState, sender: str, beliefs: Iterable[Belief], **kwargs) -> HLState:
+    def on_belief_update(self, state: HLState, sender: str, beliefs: Sequence[Belief], **kwargs) -> HLState:
         """Override to define high-level reasoner's reaction to receiving a belief update.
 
         Args:
             state (HLState): High-level reasoner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the Knowledge model that sent the update.
-            beliefs (Iterable[Belief]): received collection of beliefs.
+            beliefs (Sequence[Belief]): received collection of beliefs.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -112,14 +112,14 @@ class HLReasonerBase(ModuleBase):
         """
         return state
 
-    def on_goal_update(self, state: HLState, sender: str, goals: Iterable[Goal], **kwargs) -> HLState:
+    def on_goal_update(self, state: HLState, sender: str, goals: Sequence[Goal], **kwargs) -> HLState:
         """Override to define high-level reasoner's reaction to receiving a goal update.
 
         Args:
             state: High-level reasoner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the goal graph that sent the update.
-            goals (Iterable[Goal]): received collection of goals.
+            goals (Sequence[Goal]): received collection of goals.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

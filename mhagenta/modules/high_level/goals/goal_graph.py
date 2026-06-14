@@ -1,5 +1,5 @@
 from typing import ClassVar
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Goal, State
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
@@ -53,14 +53,14 @@ class GoalGraphBase(ModuleBase):
         """
         return state
 
-    def on_goal_update(self, state: GoalGraphState, sender: str, goals: Iterable[Goal], **kwargs) -> GoalGraphState:
+    def on_goal_update(self, state: GoalGraphState, sender: str, goals: Sequence[Goal], **kwargs) -> GoalGraphState:
         """Override to define goal graph's reaction to receiving a goal update.
 
         Args:
             state (GoalGraphState): Goal graph's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the module (high-level or low-level reasoner) that sent the update.
-            goals (Iterable[Goal]): received collection of goals.
+            goals (Sequence[Goal]): received collection of goals.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

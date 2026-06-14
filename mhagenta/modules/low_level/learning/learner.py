@@ -1,5 +1,5 @@
 from typing import Any, ClassVar
-from collections.abc import Iterable
+from collections.abc import Sequence
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Observation, State, Belief
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
@@ -64,14 +64,14 @@ class LearnerBase(ModuleBase):
         """
         return state
 
-    def on_memories(self, state: LearnerState, sender: str, memories: Iterable[Belief | Observation], **kwargs) -> LearnerState:
+    def on_memories(self, state: LearnerState, sender: str, memories: Sequence[Belief | Observation], **kwargs) -> LearnerState:
         """Override to define learner's reaction to receiving a collection of memories.
 
         Args:
             state (LearnerState): Learner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the memory structure that send the memories.
-            memories (Iterable[Belief | Observation]): received collection of memories.
+            memories (Sequence[Belief | Observation]): received collection of memories.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

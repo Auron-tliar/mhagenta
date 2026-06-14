@@ -1,5 +1,5 @@
 from typing import ClassVar
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Belief, State, Observation
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
@@ -67,7 +67,7 @@ class KnowledgeBase(ModuleBase):
     """
     module_type: ClassVar[str] = ModuleTypes.KNOWLEDGE
 
-    def on_observed_beliefs(self, state: KnowledgeState, sender: str, observation: Observation, beliefs: Iterable[Belief], **kwargs) -> KnowledgeState:
+    def on_observed_beliefs(self, state: KnowledgeState, sender: str, observation: Observation, beliefs: Sequence[Belief], **kwargs) -> KnowledgeState:
         """Override to define knowledge model's reaction to receiving a belief update.
 
         Forwards the observed beliefs to all high-level reasoners by default.
@@ -77,7 +77,7 @@ class KnowledgeBase(ModuleBase):
                 functionality.
             sender (str): `module_id` of the low-level reasoner that sent the beliefs.
             observation (Observation): Observation from which the beliefs were extracted.
-            beliefs (Iterable[Belief]): received collection of beliefs.
+            beliefs (Sequence[Belief]): received collection of beliefs.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -88,14 +88,14 @@ class KnowledgeBase(ModuleBase):
             state.outbox.send_beliefs(hl_reasoner_id=hl_reasoner.module_id, beliefs=beliefs)
         return state
 
-    def on_belief_update(self, state: KnowledgeState, sender: str, beliefs: Iterable[Belief], **kwargs) -> KnowledgeState:
+    def on_belief_update(self, state: KnowledgeState, sender: str, beliefs: Sequence[Belief], **kwargs) -> KnowledgeState:
         """Override to define knowledge model's reaction to receiving a belief update.
 
         Args:
             state (KnowledgeState): Knowledge model's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of high-level reasoner that sent the beliefs.
-            beliefs (Iterable[Belief]): received collection of beliefs.
+            beliefs (Sequence[Belief]): received collection of beliefs.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

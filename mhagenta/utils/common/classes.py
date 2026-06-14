@@ -3,12 +3,14 @@ import sys
 import time
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Self, cast
+from typing import Any, ClassVar, Self, cast, TYPE_CHECKING
 from collections.abc import Iterable, Callable
 from uuid import uuid4
 import dataclasses
 
 from pydantic.dataclasses import dataclass
+from pydantic import model_validator
+from pydantic_core import ArgsKwargs
 
 from mhagenta.utils.common.logging import ILogging
 from mhagenta.utils.common.logging import DEFAULT_FORMAT as DEFAULT_LOG_FORMAT
@@ -501,10 +503,38 @@ class Goal:
 
     """
     state: list[Belief]
-    extras: dict[str, Any] | None = None
+    extras: dict[str, Any] = dataclasses.field(default_factory=dict)
 
-    def __init__(self, state: list[Belief], **kwargs) -> None:
-        super().__init__(state=state, misc=kwargs)
+    if TYPE_CHECKING:
+        def __init__(self, state: list[Belief], **kwargs: Any) -> None: ...
+
+    @model_validator(mode='before')
+    @classmethod
+    def collect_extras(cls, data: Any) -> Any:
+        if not isinstance(data, ArgsKwargs):
+            return data
+
+        args = data.args
+        kwargs = dict(data.kwargs or dict())
+
+        known_fields = {'state', 'extras'}
+
+        extra_kwargs = {
+            key: kwargs.pop(key)
+            for key in list(kwargs) if key not in known_fields
+        }
+
+        if extra_kwargs:
+            kwargs['extras'] = {
+                **kwargs.get('extras', {}),
+                **extra_kwargs
+            }
+
+        return ArgsKwargs(args, kwargs)
+
+    # def __init__(self, state: list[Belief], **kwargs: Any) -> None:
+    #     self.state = state
+    #     self.extras = kwargs if kwargs else dict()
 
 
 @dataclass
@@ -512,8 +542,9 @@ class Observation:
     """Pydantic dataclass for agent's observations.
 
     Attributes:
-        observation_type (str): type of the observation.
         content (Any): observed object.
+        observation_type (str): type of the observation.
+        value (float, optional): (intrinsic) value of the observation.
 
     """
     content: Any
@@ -688,8 +719,8 @@ class Outbox(ABC):
             raise StopIteration
 
         recipient_id, performative, extension = self._recipients[self._next_recipient]
-        content = self._msgs[self._recipients[self._next_recipient]][self._next_content]
         self._next_content += 1
+        content = self._msgs[self._recipients[self._next_recipient]][self._next_content - 1]
         return recipient_id, performative, extension, content
 
     def __bool__(self) -> bool:

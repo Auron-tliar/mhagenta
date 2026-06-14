@@ -1,5 +1,5 @@
 from typing import ClassVar
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Observation, Belief, State
 from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBase
@@ -53,14 +53,14 @@ class MemoryBase(ModuleBase):
         """
         return state
 
-    def on_observation_update(self, state: MemoryState, sender: str, observations: Iterable[Observation], **kwargs) -> MemoryState:
+    def on_observation_update(self, state: MemoryState, sender: str, observations: Sequence[Observation], **kwargs) -> MemoryState:
         """Override to define memory structure's reaction to receiving an update of evaluated observations.
 
         Args:
             state (MemoryState): Memory structure's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the low-level reasoner that sent the update.
-            observations (Iterable[Observation]): received collection of evaluated observations.
+            observations (Sequence[Observation]): received collection of evaluated observations.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -69,14 +69,14 @@ class MemoryBase(ModuleBase):
         """
         return state
 
-    def on_belief_update(self, state: MemoryState, sender: str, beliefs: Iterable[Belief], **kwargs) -> MemoryState:
+    def on_belief_update(self, state: MemoryState, sender: str, beliefs: Sequence[Belief], **kwargs) -> MemoryState:
         """Override to define memory structure's reaction to receiving an update of belief memories.
 
         Args:
             state (MemoryState): Memory structure's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the knowledge model that sent the update.
-            beliefs (Iterable[Belief]): received collection of beliefs.
+            beliefs (Sequence[Belief]): received collection of beliefs.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

@@ -1,4 +1,4 @@
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Sequence
 from collections.abc import Iterable
 
 from mhagenta.utils import ModuleTypes, Outbox, ConnType, Message, Goal, Observation, ActionStatus, Belief, State
@@ -139,14 +139,14 @@ class LLReasonerBase(ModuleBase):
         """
         return state
 
-    def on_goal_update(self, state: LLState, sender: str, goals: list[Goal], **kwargs) -> LLState:
+    def on_goal_update(self, state: LLState, sender: str, goals: Sequence[Goal], **kwargs) -> LLState:
         """Override to define low-level reasoner's reaction to receiving a goals update.
 
         Args:
             state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the Goal graph that sent the goal update.
-            goals (list[Goal]): received list of updated goals.
+            goals (Sequence[Goal]): received list of updated goals.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
