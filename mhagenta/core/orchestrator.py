@@ -1292,6 +1292,51 @@ class Orchestrator:
         for src in sources:
             cls._copy_runtime_sources(src, dst_dir, copied)
 
+    @staticmethod
+    def _copy_package_inits(root: Path, relative_parts: tuple[str, ...], dst_dir: Path) -> None:
+        current_src = root
+        current_dst = dst_dir
+
+        for part in relative_parts:
+            current_src = current_src / part
+            current_dst = current_dst / part
+            current_dst.mkdir(exist_ok=True)
+
+            init_src = current_src / "__init__.py"
+            init_dst = current_dst / "__init__.py"
+            if init_src.exists() and not init_dst.exists():
+                shutil.copy2(init_src, init_dst)
+
+    @classmethod
+    def _copy_runtime_package_subtree(
+            cls,
+            *,
+            root: Path,
+            package_parts: tuple[str, ...],
+            dst_dir: Path,
+            copied: dict[str, Path],
+    ) -> None:
+        src = root.joinpath(*package_parts)
+        if not src.exists():
+            raise FileNotFoundError(f"Runtime package source does not exist: {src}")
+
+        target_key = ".".join(package_parts)
+        prev = copied.get(target_key)
+        if prev is not None:
+            if prev == src:
+                return
+            raise ValueError(f"Conflicting runtime sources targeting {target_key}: {prev} and {src}")
+
+        parent_parts = package_parts[:-1]
+        cls._copy_package_inits(root, parent_parts, dst_dir)
+
+        dst = dst_dir.joinpath(*package_parts)
+        if dst.exists():
+            raise FileExistsError(f"Runtime source {src} would overwrite existing file: {dst}")
+
+        shutil.copytree(src, dst)
+        copied[target_key] = src
+
     def _copy_runtime_python_modules(self, objects: Iterable[Any], dst_dir: Path, copied: dict[str, Path]) -> None:
         stdlib_dirs = {
             Path(p).resolve() for p in (sysconfig.get_path('stdlib'), sysconfig.get_path('platstdlib')) if p
@@ -1318,13 +1363,36 @@ class Orchestrator:
             if any(module_file.is_relative_to(stdlib_dir) for stdlib_dir in stdlib_dirs):
                 continue
 
+            # root = self._module_source_root(module_name, module_file)
+            # top_name = module_name.split('.', 1)[0]
+            #
+            # src = root / top_name
+            # if not src.exists():
+            #     src = root / f'{top_name}.py'
+            # if not src.exists():
+            #     raise FileNotFoundError(f'Could not resolve runtime source for module "{module_name}" from "{module_file}": "{src}')
+            #
+            # self._copy_runtime_sources(src, dst_dir, copied)
+
             root = self._module_source_root(module_name, module_file)
-            top_name = module_name.split('.', 1)[0]
+            module_parts = tuple(module_name.split("."))
 
-            src = root / top_name
-            if not src.exists():
-                src = root / f'{top_name}.py'
-            if not src.exists():
-                raise FileNotFoundError(f'Could not resolve runtime source for module "{module_name}" from "{module_file}": "{src}')
+            if module_file.name == "__init__.py":
+                package_parts = module_parts
+            else:
+                package_parts = module_parts[:-1]
 
-            self._copy_runtime_sources(src, dst_dir, copied)
+            if package_parts:
+                self._copy_runtime_package_subtree(
+                    root=root,
+                    package_parts=package_parts,
+                    dst_dir=dst_dir,
+                    copied=copied,
+                )
+            else:
+                src = root / f"{module_parts[0]}.py"
+                if not src.exists():
+                    raise FileNotFoundError(
+                        f'Could not resolve runtime source for module "{module_name}" from "{module_file}": "{src}"'
+                    )
+                self._copy_runtime_sources(src, dst_dir, copied)
