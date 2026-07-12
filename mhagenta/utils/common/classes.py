@@ -833,3 +833,8 @@ class State[T: Outbox]:
         if item not in self._custom_fields:
             raise KeyError(f'Unknown state field: {item}')
         return self.__dict__[item]
+
+    def __setitem__(self, item: str, value: Any) -> Any:
+        # if item not in self._custom_fields:
+        #     raise KeyError(f'Unknown state field: {item}')
+        self.__dict__[item] = value
