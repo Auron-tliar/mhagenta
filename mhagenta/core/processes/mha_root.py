@@ -17,6 +17,9 @@ from mhagenta.core.processes.mha_module import GlobalParams
 from mhagenta.bases import *
 
 
+TERM_TIMEOUT: float = 60.
+
+
 def initialize_module(
         global_params: GlobalParams,
         base: ModuleBase,
@@ -307,7 +310,7 @@ class MHARoot(MHAProcess):
         for module in self._modules.values():
             if module.process.poll() is None:
                 try:
-                    module.process.wait(5.)
+                    module.process.wait(TERM_TIMEOUT)
                 except subprocess.TimeoutExpired:
                     if module.process.poll() is None:
                         module.process.kill()
