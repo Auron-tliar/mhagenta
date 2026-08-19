@@ -16,6 +16,7 @@ from collections.abc import Iterable, Callable
 import functools
 import dateutil.parser
 import dateutil.tz
+from math import isfinite
 
 import dill
 import docker
@@ -35,6 +36,27 @@ from mhagenta.utils.common import DEFAULT_LOG_FORMAT, Directory
 from mhagenta.environment import MHAEnvBase
 from mhagenta.gui import Monitor
 from mhagenta.utils.common.classes import EDirectory
+
+
+def _validate_interval(
+    name: str,
+    value: float | int,
+    *,
+    allow_disabled: bool = False,
+) -> float | int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be an int or float.")
+
+    if not isfinite(value):
+        raise ValueError(f"{name} must be finite.")
+
+    if allow_disabled:
+        if value != -1 and value < 0:
+            raise ValueError(f"{name} must be -1, 0, or positive.")
+    elif value < 0:
+        raise ValueError(f"{name} must be non-negative.")
+
+    return value
 
 
 @dataclass
@@ -260,7 +282,9 @@ class Orchestrator:
             mas_rmq_close_on_exit: bool = True,
             mas_rmq_exchange_name: str | None = None,
             save_logs: bool = True,
-            no_stdout_logs: bool = False
+            no_stdout_logs: bool = False,
+            state_autosave_interval: float | int = -1,
+            module_term_timeout: float | int = 60.
     ) -> None:
         """
         Constructor method for Orchestrator.
@@ -306,6 +330,12 @@ class Orchestrator:
             save_logs (bool, optional, default=True): Whether to save agent logs. If True, saves each agent's logs to
                 `<agent_id>.log` at the root of the `save_dir`. Defaults to True.
             no_stdout_logs (bool, optional, default=False): Whether to suppress stdout logs. Defaults to False.
+            state_autosave_interval (float | int, optional, default=-1): interval at each to save module state to a
+                file. If -1, will only save state at the end of the execution; if 0, will save after every
+                behavioural method call.
+            module_term_timeout (float | int, optional, default=60.): grace period in seconds for modules to terminate
+                after the execution time has finished. If a module does not terminate within this time, it will be
+                killed by the root controller. If 0, terminate immediately upon execution timeout.
         """
         if os.name != 'nt' and os.name != 'posix':
             raise RuntimeError(f'OS {os.name} is not supported.')
@@ -361,6 +391,16 @@ class Orchestrator:
 
         self._start_time: float = -1.
         self._simulation_end_ts = -1.
+
+        self._state_autosave_interval = _validate_interval(
+            'state_autosave_interval',
+            state_autosave_interval,
+            allow_disabled=True
+        )
+        self._module_term_timeout = _validate_interval(
+            'module_term_timeout',
+            module_term_timeout
+        )
 
         self._docker_client: docker.DockerClient = docker.from_env()
         self._rabbitmq_image: Image | None = None
@@ -523,11 +563,14 @@ class Orchestrator:
             connector_cls: type[Connector] | None = None,
             connector_kwargs: dict[str, Any] | None = None,
             tags: Iterable[str] | None = None,
-            extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None
+            extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None,
+            state_autosave_interval: float | int | None = None,
+            module_term_timeout: float | int | None = None
     ) -> None:
         """Define an agent model to be added to the execution.
 
-        This can be either a single agent, a set of identical agents following the same structure model.
+        This can be either a single agent, a set of identical agents following the same structure model. For the
+        majority of optional arguments, if they are left `None`, will default to the Orchestrator's configuration.
 
         Args:
             agent_id (str): A unique identifier for the agent.
@@ -573,7 +616,12 @@ class Orchestrator:
             extra_runtime_sources (os.PathLike | str | Iterable[os.PathLike | str], optional): Additional *local*
                 runtime sources to be added to the agent's execution context. Use `requirements_path` to add
                 third-party modules. Defaults to None.
-
+            state_autosave_interval (float | int, optional): interval at each to save module state to a
+                file. If -1, will only save state at the end of the execution; if 0, will save after every behavioural
+                method call. Defaults to None.
+            module_term_timeout (float | int, optional): grace period in seconds for modules to terminate
+                after the execution time has finished. If a module does not terminate within this time, it will be
+                killed by the root controller. Defaults to None.
         """
         if agent_id in self._agents:
             raise KeyError(f'Agent with ID "{agent_id}" already exists!')
@@ -616,6 +664,18 @@ class Orchestrator:
         self._try_extend_ids(memory, module_ids)
         self._try_extend_ids(learners, module_ids)
 
+        if state_autosave_interval is not None:
+            state_autosave_interval = _validate_interval(
+                'state_autosave_interval',
+                state_autosave_interval,
+                allow_disabled=True
+            )
+        if module_term_timeout is not None:
+            module_term_timeout = _validate_interval(
+                'module_term_timeout',
+                module_term_timeout
+            )
+
         kwargs = {
             'agent_id': agent_id,
             'connector_cls': connector_cls if connector_cls else self._connector_cls,
@@ -639,7 +699,9 @@ class Orchestrator:
             'resume': self._resume if resume is None else resume,
             'log_level': self._log_level if log_level is None else log_level,
             'log_format': self._log_format,
-            'status_msg_format': self._status_msg_format
+            'status_msg_format': self._status_msg_format,
+            'state_autosave_interval': self._state_autosave_interval if state_autosave_interval is None else state_autosave_interval,
+            'module_term_timeout': self._module_term_timeout if module_term_timeout is None else module_term_timeout,
         }
 
         self._agents[agent_id] = AgentEntry(

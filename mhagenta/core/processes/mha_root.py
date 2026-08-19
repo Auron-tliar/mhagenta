@@ -17,9 +17,6 @@ from mhagenta.core.processes.mha_module import GlobalParams
 from mhagenta.bases import *
 
 
-TERM_TIMEOUT: float = 60.
-
-
 def initialize_module(
         global_params: GlobalParams,
         base: ModuleBase,
@@ -89,7 +86,9 @@ class MHARoot(MHAProcess):
                  resume: bool = False,
                  log_level: int = logging.INFO,
                  log_format: str = DEFAULT_LOG_FORMAT,
-                 status_msg_format: str = '[status_upd]::{}'
+                 status_msg_format: str = '[status_upd]::{}',
+                 state_autosave_interval: float | int = -1,
+                 module_term_timeout: float | int = 60.
                  ) -> None:
         agent_start_time = time.time()
         super().__init__(
@@ -105,6 +104,7 @@ class MHARoot(MHAProcess):
             log_format=log_format
         )
         self._expected_start_time = exec_start_time
+        self._module_term_timeout = module_term_timeout
 
         if modules is None:
             modules: list[ModuleBase] = list()
@@ -153,7 +153,8 @@ class MHARoot(MHAProcess):
             save_format=save_format,
             resume=resume,
             log_level=log_level,
-            log_format=log_format
+            log_format=log_format,
+            state_autosave_interval=state_autosave_interval
         )
 
         self._messenger = RootMessenger(
@@ -310,7 +311,7 @@ class MHARoot(MHAProcess):
         for module in self._modules.values():
             if module.process.poll() is None:
                 try:
-                    module.process.wait(TERM_TIMEOUT)
+                    module.process.wait(self._module_term_timeout)
                 except subprocess.TimeoutExpired:
                     if module.process.poll() is None:
                         module.process.kill()

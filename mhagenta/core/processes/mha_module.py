@@ -2,6 +2,7 @@ import json
 import logging
 from dataclasses import field
 from pathlib import Path
+import shutil
 from typing import Any, ClassVar, Literal
 from collections.abc import Iterable, Callable
 
@@ -32,8 +33,9 @@ class GlobalParams(BaseModel):
     save_dir: str
     save_format: Literal['json', 'dill'] = 'json'
     resume: bool = False
-    log_level: int | str = logging.INFO,
+    log_level: int | str = logging.INFO
     log_format: str = DEFAULT_LOG_FORMAT
+    state_autosave_interval: float | int = -1
 
 
 class ModuleBase:
@@ -202,10 +204,17 @@ class MHAModule(MHAProcess):
         self._base._state_setter = self._process_update
         self._status_frequency = global_params.status_frequency
 
+        self._state_autosave_interval = global_params.state_autosave_interval
+
         self._save_dir = global_params.save_dir
         self._save_format = global_params.save_format
         if global_params.resume:
-            self.load_state()
+            try:
+                self.load_state()
+            except Exception as ex:
+                self.warning(f'Could not load state from {self._save_dir}!'
+                             f' Reason: {type(ex)}({ex})! Trying to load a backup...')
+                self.load_state(backup=True)
 
         self._step_action = self._base.step if not self._base.is_reactive else None
         self._step_counter = 0
@@ -267,6 +276,14 @@ class MHAModule(MHAProcess):
                 ts=self._time.exec_start_ts - self._time.agent_start_ts,  # self._time.agent,
                 periodic=True,
                 frequency=self._step_frequency
+            )
+        if self._state_autosave_interval > 0:
+            self._queue.push(
+                func=self.save_state,
+                ts=self._time.exec_start_ts - self._time.agent_start_ts,
+                periodic=True,
+                frequency=self._state_autosave_interval,
+                priority=True
             )
 
     def _on_first_step(self) -> None:
@@ -361,6 +378,8 @@ class MHAModule(MHAProcess):
 
     def _process_update(self, update: State) -> None:
         self._state = update
+        if self._state_autosave_interval == 0:
+            self.save_state()
         if self._state.outbox:
             self._process_outbox()
 
@@ -431,29 +450,42 @@ class MHAModule(MHAProcess):
     def recipient_reg_entry(self, sender: str, conn_type: str, callback: MessageCallback, extension: str = '') -> tuple[Sender, Channel, MessageCallback]:
         return sender, self.recipient_channel(sender, conn_type, extension), callback
 
-    def save_state(self) -> None:
-        path = Path(self._save_dir)
-        path.mkdir(exist_ok=True)
-        path /= f'{self._agent_id}.{self._module_id}.sav'
-        match self._save_format:
-            case 'json':
-                path = path.with_suffix('.json')
-                with open(path, 'w') as f:
-                    json.dump(self._state.dump(), f)
-            case 'dill':
-                with open(path, 'wb') as f:
-                    dill.dump(self._state.dump(), f)
-            case _:
-                raise ValueError(f'Unsupported save format: {self._save_format}!')
+    def _save_with_backup(self, path: Path, func: Callable, byte_mode: bool = True) -> None:
+        tmp_path = path.with_name(f'{path.name}.tmp')
+        with open(tmp_path, 'wb' if byte_mode else 'w') as f:
+            func(self._state.dump(), f)
+        if path.exists():
+            shutil.copy2(path, path.with_name(f'{path.name}.backup'))
+        tmp_path.replace(path)
 
-    def load_state(self) -> None:
-        path = Path(self._save_dir) / f'{self._agent_id}.{self._module_id}.sav)'
+    def save_state(self) -> None:
+        try:
+            path = Path(self._save_dir)
+            path.mkdir(exist_ok=True)
+            path /= f'{self._agent_id}.{self._module_id}.sav'
+            match self._save_format:
+                case 'json':
+                    path = path.with_suffix('.json')
+                    self._save_with_backup(path, json.dump, False)
+                case 'dill':
+                    self._save_with_backup(path, dill.dump)
+                case _:
+                    raise ValueError(f'Unsupported save format: {self._save_format}!')
+        except Exception as ex:
+            self.warning(f'Failed to save state! Reason: {type(ex)}({ex})! Resuming execution...')
+
+    def load_state(self, backup: bool = False) -> None:
+        path = Path(self._save_dir) / f'{self._agent_id}.{self._module_id}.sav'
         match self._save_format:
             case 'json':
                 path = path.with_suffix('.json')
+                if backup:
+                    path = path.with_name(f'{path.name}.backup')
                 with open(path, 'r') as f:
                     state = json.load(f)
             case 'dill':
+                if backup:
+                    path = path.with_name(f'{path.name}.backup')
                 with open(path, 'rb') as f:
                     state = dill.load(f)
             case _:
