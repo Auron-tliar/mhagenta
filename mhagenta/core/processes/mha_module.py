@@ -382,6 +382,10 @@ class MHAModule(MHAProcess):
             self.save_state()
         if self._state.outbox:
             self._process_outbox()
+        term, reason = self._state.outbox.pop_term_request()
+        if term:
+            assert reason is not None
+            self._request_term(reason)
 
     def _process_outbox(self) -> None:
         for receiver, performative, extension, content in self._state.outbox:
@@ -425,6 +429,16 @@ class MHAModule(MHAProcess):
             ts=self._time.agent,
             args=args
         )
+
+    def _request_term(self, reason: str):
+        self.debug(f'Requesting termination (reason: {reason})...')
+        self._messenger.report_status(StatusReport(
+            agent_id=self._agent_id,
+            module_id=self._module_id,
+            status=StatusReport.REQUESTING_TERM,
+            ts=self._time.agent,
+            args={'reason': reason}
+        ))
 
     def _report_status(self) -> None:
         self.debug(f'Reporting {self.status}...')

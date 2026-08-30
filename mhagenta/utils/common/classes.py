@@ -604,6 +604,8 @@ class StatusReport:
     ERROR: ClassVar[str] = 'ERROR'
     TIMEOUT: ClassVar[str] = 'TIMEOUT'
 
+    REQUESTING_TERM: ClassVar[str] = 'REQUESTING_TERM'
+
     agent_id: str
     module_id: str
     status: str
@@ -698,6 +700,8 @@ class Outbox(ABC):
         self._next_recipient = -1
         self._next_content = -1
 
+        self._term_request: str | None = None
+
     def _add(self, recipient_id: str, performative: str, content: Any | dict[str, Any], extension: str = '') -> None:
         if (recipient_id, performative, extension) in self._msgs:
             self._msgs[recipient_id, performative, extension].append(content)
@@ -741,6 +745,21 @@ class Outbox(ABC):
         self._recipients = list()
         self._next_recipient = -1
         self._next_content = -1
+
+    def terminate_agent(self, reason: str = 'Manual termination') -> None:
+        """
+        Request the root controller to terminate the agent execution by sending the early close command.
+
+        Attributes:
+            reason (str, Optional): the reason to attach to the close request for logging. Defaults to
+                `Manual termination`
+        """
+        self._term_request = reason
+
+    def pop_term_request(self) -> tuple[bool, str | None]:
+        request = self._term_request
+        self._term_request = None
+        return request is not None, request
 
 
 class State[T: Outbox]:

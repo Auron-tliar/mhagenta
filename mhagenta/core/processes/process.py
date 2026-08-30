@@ -351,7 +351,7 @@ class MHAProcess(MHABase, ABC):
             case self.Stage.running:
                 await self.on_run()
             case self.Stage.stopping:
-                await self.stop()
+                await self.stop(self._stop_reason if self._stop_reason else 'USER COMMAND')
 
     async def on_init(self) -> None:
         pass

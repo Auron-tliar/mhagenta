@@ -211,8 +211,6 @@ class LogParser:
         log_lines: list[str]
 
         while True:
-            if self._stop_checker():
-                break
             for sid, info in self._sources.items():
                 assert info.container is not None
                 raw_log = info.container.logs(stdout=True, stderr=True, tail='all', timestamps=True, since=(info.last_ts + self.US).timestamp())
@@ -229,6 +227,8 @@ class LogParser:
             for entry in logs:
                 self._add_log(entry.msg, save_path=entry.source.path, print_to_stdout=self._stdout)
             logs.clear()
+            if self._stop_checker():
+                break
             await asyncio.sleep(self._check_freq)
 
 
@@ -284,7 +284,8 @@ class Orchestrator:
             save_logs: bool = True,
             no_stdout_logs: bool = False,
             state_autosave_interval: float | int = -1,
-            module_term_timeout: float | int = 60.
+            module_term_timeout: float | int = 60.,
+            stop_on_agents_term: bool = False
     ) -> None:
         """
         Constructor method for Orchestrator.
@@ -336,6 +337,10 @@ class Orchestrator:
             module_term_timeout (float | int, optional, default=60.): grace period in seconds for modules to terminate
                 after the execution time has finished. If a module does not terminate within this time, it will be
                 killed by the root controller. If 0, terminate immediately upon execution timeout.
+            stop_on_agents_term (bool, optional, default=False): whether to stop the orchestrator when all agent
+                containers have stopped, without waiting for the environment's configured execution duration timeout.
+                In this case, the environment will enter a graceful stop process (as if timed out), executing normal
+                "on stop" triggers.
         """
         if os.name != 'nt' and os.name != 'posix':
             raise RuntimeError(f'OS {os.name} is not supported.')
@@ -388,6 +393,9 @@ class Orchestrator:
         self._mas_rmq_close_on_exit = mas_rmq_close_on_exit
         self._mas_rmq_container: Container | None = None
         self._mas_rmq_exchange_name = mas_rmq_exchange_name
+
+        self._stop_on_agents_term = stop_on_agents_term
+        self._env_stop_requested = False
 
         self._start_time: float = -1.
         self._simulation_end_ts = -1.
@@ -1225,7 +1233,7 @@ class Orchestrator:
         assert agent.containers is not None, 'Agent containers are not set!'
         for container in agent.containers.values():
             container.reload()
-        return all([container.status == 'exited' for container in agent.containers.values()])
+        return all([container.status in {'exited', 'dead'} for container in agent.containers.values()])
 
     @property
     def _agents_stopped(self) -> bool:
@@ -1250,10 +1258,36 @@ class Orchestrator:
         return True
 
     async def _simulation_end_timer(self) -> None:
-        # print(f'[Orchestrator] Simulation end time: {datetime.fromtimestamp(self._simulation_end_ts).strftime("%Y-%m-%d %H:%M:%S")} '
-        #       f'(in {self._simulation_end_ts - time.time():.3f}) seconds).')
-        await asyncio.sleep(self._simulation_end_ts - time.time())
+        while True:
+            entries = (*self._agents.values(), *self._environments.values())
+            containers_started = all(entry.containers is not None for entry in entries)
+
+            if containers_started and self._containers_stopped:
+                break
+
+            if self._stop_on_agents_term and containers_started and self._agents and self._agents_stopped:
+                await self._stop_environments()
+
+            remaining = self._simulation_end_ts - time.time()
+            if remaining <= 0 and not self._stop_on_agents_term:
+                break
+
+            await asyncio.sleep(self.LOG_CHECK_FREQ if remaining < 0 else min(self.LOG_CHECK_FREQ, remaining))
+
         self._stopping = True
+
+    async def _stop_environments(self) -> None:
+        if self._env_stop_requested:
+            return
+
+        self._env_stop_requested = True
+
+        containers = [
+            container for env in self._environments.values() if env.containers is not None
+            for container in env.containers.values()
+        ]
+
+        await asyncio.gather(*(asyncio.to_thread(container.stop, timeout=30) for container in containers))
 
     def __getitem__(self, agent_id: str) -> AgentEntry:
         return self._agents[agent_id]

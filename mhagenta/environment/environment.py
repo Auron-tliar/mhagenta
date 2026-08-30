@@ -111,6 +111,7 @@ class MHAEnvironment(MHABase, ABC):
         self.state = base.state
 
         self._main_task_group: asyncio.TaskGroup | None = None
+        self._stop_event = asyncio.Event()
 
         signal.signal(signal.SIGINT, self.on_kill)
         signal.signal(signal.SIGTERM, self.on_kill)
@@ -136,7 +137,10 @@ class MHAEnvironment(MHABase, ABC):
             tg.create_task(self._timeout())
 
     async def _timeout(self) -> None:
-        await asyncio.sleep(self._exec_duration)
+        try:
+            await asyncio.wait_for(self._stop_event.wait(), timeout=self._exec_duration)
+        except TimeoutError:
+            pass
         await self.stop()
 
     @abstractmethod
@@ -212,7 +216,7 @@ class MHAEnvironment(MHABase, ABC):
                          f' Aborting processing and attempting to resume execution...')
 
     def on_kill(self, signum: int | signal.Signals, frame: FrameType) -> None:
-        self.stop()
+        self._stop_event.set()
 
     def save_state(self) -> None:
         if self._save_dir is None:

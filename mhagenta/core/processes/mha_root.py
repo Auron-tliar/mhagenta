@@ -220,6 +220,14 @@ class MHARoot(MHAProcess):
             self.error(f'Wrongly received status for agent {status.agent_id}!')
             return
 
+        if status.status == StatusReport.REQUESTING_TERM:
+            assert status.args is not None
+            reason = status.args.get(
+                'reason',
+                f'Request with empty reason from module \'{status.module_id}\'')
+            self.stop_exec(reason=reason)
+            return
+
         self.debug(f'Received status: \"{status.module_id}:{status.status}\".')
         self._modules[status.module_id].status = status.status
         if status.status == status.READY:
@@ -289,7 +297,10 @@ class MHARoot(MHAProcess):
         ))
         self._stop_sent = True
         if self._stage < self.Stage.stopping:
-            self.stop(reason=reason)
+            self._stop_reason = reason
+            assert self._main_loop is not None
+            assert self._asyncio_loop is not None
+            self._asyncio_loop.call_soon_threadsafe(self._main_loop.cancel)
 
     async def on_stop(self) -> None:
         self.stop_exec()
