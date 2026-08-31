@@ -12,4 +12,4 @@ if ! curl -fsS --connect-timeout 2 --max-time 3 "http://$RMQ_HOST:$RMQ_PORT/" >/
   fi
 fi
 
-python /agent/environment_launcher.py
+exec python /agent/environment_launcher.py
