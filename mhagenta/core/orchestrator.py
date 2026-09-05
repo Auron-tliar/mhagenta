@@ -21,6 +21,7 @@ from math import isfinite
 import dill
 import docker
 import pika
+from docker.types import DeviceRequest
 from pika.adapters import BlockingConnection
 from pika.exceptions import AMQPConnectionError
 from docker.errors import NotFound
@@ -70,6 +71,7 @@ class Entry:
     script_path: Path | None = None
     requirements_path: Path | None = None
     extra_runtime_sources: tuple[Path, ...] = tuple()
+    gpu_device_ids: str | list[str] | Literal['all', 'any', 'none'] = 'none'
 
 
 @dataclass
@@ -285,7 +287,8 @@ class Orchestrator:
             no_stdout_logs: bool = False,
             state_autosave_interval: float | int = -1,
             module_term_timeout: float | int = 60.,
-            stop_on_agents_term: bool = False
+            stop_on_agents_term: bool = False,
+            gpu_device_ids: str | int | Iterable[str | int] | Literal['all', 'any', 'none'] = 'none'
     ) -> None:
         """
         Constructor method for Orchestrator.
@@ -341,6 +344,9 @@ class Orchestrator:
                 containers have stopped, without waiting for the environment's configured execution duration timeout.
                 In this case, the environment will enter a graceful stop process (as if timed out), executing normal
                 "on stop" triggers.
+            gpu_device_ids (str | int | Iterable[str | int] | Literal['all', 'any', 'none'], optional, default='none'):
+                GPU device IDs to expose to the agent containers with Docker. 'all' will expose all available GPUs,
+                'any' will expose a single available GPU, and 'none' will not expose any GPU.
         """
         if os.name != 'nt' and os.name != 'posix':
             raise RuntimeError(f'OS {os.name} is not supported.')
@@ -397,6 +403,8 @@ class Orchestrator:
         self._stop_on_agents_term = stop_on_agents_term
         self._env_stop_requested = False
 
+        self._gpu_ids: list[str] | Literal['all', 'any', 'none'] = self._normalize_gpu_list(gpu_device_ids)
+
         self._start_time: float = -1.
         self._simulation_end_ts = -1.
 
@@ -430,6 +438,24 @@ class Orchestrator:
             no_stdout=no_stdout_logs
         )
 
+    @staticmethod
+    def _normalize_gpu_list(gpu_device_ids: str | int | Iterable[str | int] | Literal['all', 'any', 'none']) -> list[str] | Literal['all', 'any', 'none']:
+        if not isinstance(gpu_device_ids, (int, str, Iterable)) or isinstance(gpu_device_ids, bool):
+            raise TypeError(f'Invalid `gpu_device_ids` argument type: {type(gpu_device_ids)}')
+
+        norm_list: list[str] = []
+        if isinstance(gpu_device_ids, str) or isinstance(gpu_device_ids, int):
+            if gpu_device_ids in ('all', 'any', 'none'):
+                return gpu_device_ids
+            else:
+                norm_list.append(str(gpu_device_ids))
+        elif isinstance(gpu_device_ids, Iterable) and not isinstance(gpu_device_ids, str):
+            for gpu_id in gpu_device_ids:
+                if not isinstance(gpu_id, (int, str)) or isinstance(gpu_id, bool):
+                    raise TypeError(f'Invalid GPU device ID type: {type(gpu_id)}')
+                norm_list.append(str(gpu_id))
+        return norm_list
+
     def add_environment(
             self,
             base: MHAEnvBase,
@@ -445,7 +471,8 @@ class Orchestrator:
             log_level: int | str | None = None,
             log_format: str | None = None,
             tags: Iterable[str] | None = None,
-            extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None
+            extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None,
+            gpu_device_ids: str | int | Iterable[str | int] | Literal['all', 'any', 'none'] | None = 'none',
     ) -> None:
         """
         Add a configuration of an environment to build at the runtime.
@@ -471,9 +498,10 @@ class Orchestrator:
             extra_runtime_sources (os.PathLike | str | Iterable[os.PathLike | str], optional): Additional *local*
                 runtime sources to be added to the environment's execution context. Use `requirements_path` to add
                 third-party modules. Defaults to None.
-
-        Returns:
-
+            gpu_device_ids (str | int | Iterable[str | int] | Literal['all', 'any', 'none'] | None, optional,
+                default='none'): GPU device IDs to expose to the environment's container. If `None`, will use the
+                Orchestrator's value. If 'all', will expose all available GPUs. If 'any', will expose a single available
+                GPU. If 'none' (default), will not expose any GPU.
         """
         from mhagenta.defaults.communication.rabbitmq import RMQEnvironment
         if host is None:
@@ -510,6 +538,11 @@ class Orchestrator:
             'tags': tags
         }
 
+        if gpu_device_ids is None:
+            gpu_device_ids = self._gpu_ids
+        else:
+            gpu_device_ids = self._normalize_gpu_list(gpu_device_ids)
+
         self._environments[env_id] = EnvironmentEntry(
             env_id=env_id,
             kwargs=kwargs,
@@ -522,7 +555,8 @@ class Orchestrator:
             port_mapping=port_mapping if port_mapping else self._port_mapping,
             script_path=Path(init_script).resolve() if init_script is not None else None,
             requirements_path=Path(requirements_path).resolve() if requirements_path is not None else None,
-            extra_runtime_sources=self._normalize_runtime_sources(extra_runtime_sources)
+            extra_runtime_sources=self._normalize_runtime_sources(extra_runtime_sources),
+            gpu_device_ids=gpu_device_ids
         )
 
     @staticmethod
@@ -573,7 +607,8 @@ class Orchestrator:
             tags: Iterable[str] | None = None,
             extra_runtime_sources: os.PathLike | str | Iterable[os.PathLike | str] | None = None,
             state_autosave_interval: float | int | None = None,
-            module_term_timeout: float | int | None = None
+            module_term_timeout: float | int | None = None,
+            gpu_device_ids: str | int | Iterable[str | int] | Literal['all', 'any', 'none'] | None = None,
     ) -> None:
         """Define an agent model to be added to the execution.
 
@@ -630,6 +665,10 @@ class Orchestrator:
             module_term_timeout (float | int, optional): grace period in seconds for modules to terminate
                 after the execution time has finished. If a module does not terminate within this time, it will be
                 killed by the root controller. Defaults to None.
+            gpu_device_ids (str | int | Iterable[str | int] | Literal['all', 'any', 'none'], optional): GPU device IDs
+                to expose to the agent's container. If `None`, will use the Orchestrator's value. If 'all', will expose
+                all available GPUs. If 'any', will expose a single available GPU. If 'none' (default), will not expose
+                any GPU.
         """
         if agent_id in self._agents:
             raise KeyError(f'Agent with ID "{agent_id}" already exists!')
@@ -712,6 +751,11 @@ class Orchestrator:
             'module_term_timeout': self._module_term_timeout if module_term_timeout is None else module_term_timeout,
         }
 
+        if gpu_device_ids is None:
+            gpu_device_ids = self._gpu_ids
+        else:
+            gpu_device_ids = self._normalize_gpu_list(gpu_device_ids)
+
         self._agents[agent_id] = AgentEntry(
             agent_id=agent_id,
             port_mapping=port_mapping if port_mapping else self._port_mapping,
@@ -720,7 +764,8 @@ class Orchestrator:
             tags=tags,
             script_path=Path(init_script).resolve() if init_script is not None else None,
             requirements_path=Path(requirements_path).resolve() if requirements_path is not None else None,
-            extra_runtime_sources=self._normalize_runtime_sources(extra_runtime_sources)
+            extra_runtime_sources=self._normalize_runtime_sources(extra_runtime_sources),
+            gpu_device_ids=gpu_device_ids
         )
         if self._task_group is not None:
             self._task_group.create_task(self._run_agent(self._agents[agent_id], force_run=self._force_run))
@@ -997,6 +1042,48 @@ class Orchestrator:
             rebuild_image=rebuild_image
         )
 
+    @staticmethod
+    def _resolve_gpu_ids(gpu_device_ids: str | list[str]) -> list[DeviceRequest] | None:
+        """Convert an optional GPU selection into Docker device requests."""
+
+        if len(gpu_device_ids) <= 0:
+            return None
+
+        if isinstance(gpu_device_ids, str):
+            match gpu_device_ids:
+                case 'all':
+                    return [
+                        DeviceRequest(
+                            driver="nvidia",
+                            count=-1,
+                            capabilities=[["gpu"]],
+                        )
+                    ]
+                case 'any':
+                    return [
+                        DeviceRequest(
+                            driver="nvidia",
+                            count=1,
+                            capabilities=[["gpu"]],
+                        )
+                    ]
+                case 'none':
+                    return None
+                case _:
+                    warnings.warn(f'Unrecognized GPU device IDs: {gpu_device_ids}')
+                    return None
+
+        if len(set(gpu_device_ids)) != len(gpu_device_ids):
+            raise ValueError("gpu_device_ids must not contain duplicates.")
+
+        return [
+            DeviceRequest(
+                driver="nvidia",
+                device_ids=gpu_device_ids,
+                capabilities=[["gpu"]],
+            )
+        ]
+
     async def _run_agent(
             self,
             agent: AgentEntry,
@@ -1032,6 +1119,8 @@ class Orchestrator:
             else:
                 host, port = None, None
 
+            gpu_requests = self._resolve_gpu_ids(agent.gpu_device_ids)
+
             assert agent.containers is not None
             agent.containers[agent_name] = self._docker_client.containers.run(
                 image=agent.image,
@@ -1048,7 +1137,8 @@ class Orchestrator:
                     str(agent_dir): {'bind': f'/{self.SAVE_SUBDIR}', 'mode': 'rw'}
                 },
                 extra_hosts={'host.docker.internal': 'host-gateway'},
-                ports=agent.port_mapping
+                ports=agent.port_mapping,
+                device_requests=gpu_requests
             )
         self._log_parser.add_container(agent)
 
@@ -1076,6 +1166,9 @@ class Orchestrator:
             port = int(port) + 10_000
         else:
             host, port = None, None
+
+        gpu_requests = self._resolve_gpu_ids(environment.gpu_device_ids)
+
         environment.containers = {environment.env_id: self._docker_client.containers.run(
             image=environment.image,
             detach=True,
@@ -1091,7 +1184,8 @@ class Orchestrator:
                 str(env_dir): {'bind': f'/{self.SAVE_SUBDIR}', 'mode': 'rw'}
             },
             extra_hosts={'host.docker.internal': 'host-gateway'},
-            ports=environment.port_mapping
+            ports=environment.port_mapping,
+            device_requests=gpu_requests
         )}
         self._log_parser.add_container(environment)
 
