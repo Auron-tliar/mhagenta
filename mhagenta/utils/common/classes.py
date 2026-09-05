@@ -398,7 +398,7 @@ class EDirectory(BaseDirectory):
     ENVIRONMENT = 'environment'
     AGENT = 'agent'
     localhost_win = 'host.docker.internal'
-    localhost_linux = 'http://172.17.0.1'
+    localhost_linux = 'host.docker.internal'
 
     def __init__(self,
                  # env_address: dict[str, dict[str, Any]] | None = None,
