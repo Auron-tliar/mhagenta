@@ -10,6 +10,10 @@ from mhagenta.environment import MHAEnvironment, MHAEnvBase
 class RMQEnvironment(MHAEnvironment):
     """
     RabbitMQ-based environment
+
+    Handles ``OBSERVE`` and ``ACT`` requests addressed to ``env_id`` on a shared external exchange. Responses are
+    routed to ``<agent_id>::observations`` or ``<agent_id>::act_status``. Configure the same broker and exchange
+    on the participating ``RMQPerceptorBase`` and ``RMQActuatorBase`` instances.
     """
 
     def __init__(self,
@@ -28,6 +32,30 @@ class RMQEnvironment(MHAEnvironment):
                  log_format: str = DEFAULT_LOG_FORMAT,
                  tags: Iterable[str] | None = None
                  ) -> None:
+        """Configure an environment with a RabbitMQ transport.
+
+        When using ``Orchestrator.add_environment()``, the orchestrator constructs this runtime in its container.
+        Direct callers must await ``initialize()`` and then ``start()``.
+
+        Args:
+            base (MHAEnvBase): Synchronous environment behaviour and initial state.
+            env_id (str, optional): Environment ID and request routing key. Defaults to ``'environment'``.
+            host (str, optional): RabbitMQ host as reachable from the environment process. Defaults to ``'localhost'``.
+            port (int, optional): RabbitMQ AMQP port. Defaults to 5672.
+            exec_duration (float, optional): Runtime timeout in seconds after ``start()``. Defaults to 60.
+            exchange_name (str, optional): Shared external exchange. Defaults to ``'mhagenta'``; supply an explicit
+                matching value on the perceptors and actuators, whose default exchange is ``'mhagenta-env'``.
+            start_time_reference (float, optional): Unix timestamp used as the environment clock origin.
+                Defaults to construction time.
+            save_dir (os.PathLike, optional): Final snapshot directory. Defaults to None, disabling persistence.
+                Path strings are also accepted by the underlying runtime.
+            save_format (Literal['json', 'dill'], optional): Snapshot serializer. Defaults to ``'json'``.
+            log_id (str, optional): Runtime logging identifier. Defaults to the runtime class name.
+            log_tags (list[str], optional): Initial runtime logging tags. Defaults to the environment ID.
+            log_level (int | str, optional): Runtime and connector logging threshold. Defaults to ``logging.DEBUG``.
+            log_format (str, optional): Runtime logging format. Defaults to ``DEFAULT_LOG_FORMAT``.
+            tags (Iterable[str], optional): Environment tags for directory searches. Defaults to no tags.
+        """
         super().__init__(
             base=base,
             env_id=env_id,

@@ -99,16 +99,16 @@ LLState = State[LLOutbox]
 
 
 class LLReasonerBase(ModuleBase):
-    """Base class for defining Low-level reasoner behavior (also inherits common methods from `ModuleBase`).
+    """Base class for defining Low-level reasoner behaviour (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behaviour, override the base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
     module_type: ClassVar[str] = ModuleTypes.LLREASONER
 
     def on_observation(self, state: LLState, sender: str, observation: Observation, **kwargs) -> LLState:
-        """Override to define low-level reasoner's reaction to receiving an observation object.
+        """Override to define the low-level reasoner's reaction to receiving an observation object.
 
         Args:
             state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
@@ -124,7 +124,7 @@ class LLReasonerBase(ModuleBase):
         return state
 
     def on_action_status(self, state: LLState, sender: str, action_status: ActionStatus, **kwargs) -> LLState:
-        """Override to define low-level reasoner's reaction to receiving an action status object.
+        """Override to define the low-level reasoner's reaction to receiving an action status object.
 
         Args:
             state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
@@ -140,13 +140,13 @@ class LLReasonerBase(ModuleBase):
         return state
 
     def on_goal_update(self, state: LLState, sender: str, goals: Sequence[Goal], **kwargs) -> LLState:
-        """Override to define low-level reasoner's reaction to receiving a goals update.
+        """Override to define the low-level reasoner's reaction to receiving a goal update.
 
         Args:
             state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the Goal graph that sent the goal update.
-            goals (Sequence[Goal]): received list of updated goals.
+            goals (Sequence[Goal]): the received list of updated goals.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -156,13 +156,13 @@ class LLReasonerBase(ModuleBase):
         return state
 
     def on_model(self, state: LLState, sender: str, model: Any, **kwargs) -> LLState:
-        """Override to define low-level reasoner's reaction to receiving a learned model.
+        """Override to define the low-level reasoner's reaction to receiving a learned model.
 
         Args:
             state (LLState): Low-level reasoner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the learner that sent the model.
-            model (Any): received learned model object.
+            model (Any): the received learned model object.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

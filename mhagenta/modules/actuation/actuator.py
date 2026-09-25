@@ -28,22 +28,22 @@ ActuatorState = State[ActuatorOutbox]
 
 
 class ActuatorBase(ModuleBase):
-    """Base class for defining Actuator behavior (also inherits common methods from `ModuleBase`).
+    """Base class for defining Actuator behaviour (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behaviour, override the base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
     module_type: ClassVar[str] = ModuleTypes.ACTUATOR
 
     def on_request(self, state: ActuatorState, sender: str, **kwargs) -> ActuatorState:
-        """Override to define actuator's reaction to receiving an action reqeust.
+        """Override to define the actuator's reaction to receiving an action request.
 
         Args:
             state (ActuatorState): Actuator's internal state enriched with relevant runtime information and
                 functionality.
-            sender (str): `module_id` of the low-level reasoner that sent the request.
-                **kwargs: additional keyword arguments included in the message.
+            sender (str): `module_id` of the reasoner that sent the request.
+            **kwargs: additional keyword arguments included in the message.
 
         Returns:
             ActuatorState: modified or unaltered internal state of the module.

@@ -56,6 +56,7 @@ class MHABase(ILogging, ABC):
 
     @abstractmethod
     async def initialize(self) -> None:
+        """Initialize runtime resources asynchronously before starting this component."""
         pass
 
     @property
@@ -86,7 +87,7 @@ class AgentTime:
         """System time in seconds.
 
         Returns:
-            float: System time (in seconds) as provided by `time` module.
+            float: System time (in seconds) as provided by the `time` module.
 
         """
         return round(time.time(), self._decimals)
@@ -96,7 +97,7 @@ class AgentTime:
         """Agent time in seconds.
 
         Returns:
-            float: Seconds since the agent was launched (i.e., since the initialization of agent's root controller).
+            float: Seconds since the agent was launched (i.e., since the initialization of the agent's root controller).
 
         """
         return round(time.time() - self._agent_start_ts, self._decimals)
@@ -145,13 +146,13 @@ class AgentTime:
         Pass the information on when this agent execution is scheduled to start.
 
         Args:
-            exec_start_ts: system-level Unix timestamp (in seconds) of agent's scheduled start time.
+            exec_start_ts: system-level Unix timestamp (in seconds) of the agent's scheduled start time.
         """
         self._exec_start_ts = exec_start_ts
 
     def get_exec_time(self) -> float | None:
         """
-        Functional version of `exec` property. Used by execution queues.
+        Functional version of the `exec` property. Used by execution queues.
 
         Returns:
             float if defined, None otherwise
@@ -182,6 +183,10 @@ class TagCard[T](ABC):
         self.tags: set[T] = set(tags)
 
     def match(self, query: Iterable[T]) -> bool:
+        """Return whether every tag in ``query`` belongs to this card.
+
+        An empty query matches every card. Matching uses exact tag values.
+        """
         for tag in query:
             if tag not in self.tags:
                 return False
@@ -206,6 +211,11 @@ class TagCard[T](ABC):
 class ICard(TagCard[str]):
     """
     Directory entry class for the internal directory.
+
+    Attributes:
+        module_id (str): Module identifier, unique within its agent; also exposed as ``id``.
+        module_type (str): One of the module role names in ``ModuleTypes``.
+        tags (set[str]): Tags supplied with the module definition, used by directory searches.
     """
     def __init__(self, module_id: str, module_type: str, tags: Iterable[str] | None = None) -> None:
         self.module_id = module_id
@@ -226,7 +236,10 @@ class ECard(TagCard[str]):
 
     Args:
         agent_id (str): unique ID of the corresponding entity. Currently, can also be an environment ID.
-        address (dict[str, Any]): Any information necessary for contacting the corresponding entity.
+        address (dict[str, Any]): Transport-specific connection information. Orchestrator-created RabbitMQ cards
+            contain ``host``, ``port``, ``exchange_name``, and either ``agent_id`` or ``env_id``. The card's ``id``
+            is the recipient identifier; the address dictionary is not itself a recipient ID.
+        tags (Iterable[str], optional): Search tags, stored as a set. Defaults to no tags.
     """
     def __init__(self, agent_id: str, address: dict[str, Any], tags: Iterable[str] | None = None) -> None:
         self.agent_id = agent_id
@@ -244,12 +257,25 @@ class ECard(TagCard[str]):
 class BaseDirectory:
     """
     Base class for all directory types. Provides access by key and search by tag functionalities.
+
+    String keys select a card by its exact ID; integer keys select by insertion order, including negative indices.
+    Membership checks such as ``module_id in directory`` test IDs. Lookups return cards, not ID strings.
+
+    Args:
+        content (Iterable[TagCard[str]], optional): Initial cards. Supply a reusable collection such as a list or
+            tuple, since construction traverses it to build both the ordered contents and the ID index.
     """
     def __init__(self, content: Iterable[TagCard[str]] | None = None) -> None:
         self._content = list(content) if content is not None else list()
         self._by_id = {card.id: card for card in content} if content is not None else dict()
 
     def __getitem__(self, item: str | int) -> TagCard[str]:
+        """Return a card by ID or insertion index.
+
+        Raises:
+            KeyError: The string ID is not registered.
+            IndexError: The integer index is outside the directory.
+        """
         if isinstance(item, int):
             return self._content[item]
         else:
@@ -259,6 +285,15 @@ class BaseDirectory:
         return item in self._by_id
 
     def search(self, tags: Iterable[str]) -> list[TagCard[str]]:
+        """Return cards containing all requested tags, in insertion order.
+
+        Args:
+            tags (Iterable[str]): Exact tags to match. Supply a reusable collection such as a list or set because
+                it is checked against every card. An empty collection selects all cards.
+
+        Returns:
+            list[TagCard[str]]: Matching cards, or an empty list when no card matches.
+        """
         output = list()
         for card in self._content:
             if card.match(tags):
@@ -300,7 +335,7 @@ class IDirectory(BaseDirectory):
         """(Property) List of Perceptor info cards.
 
         Returns:
-            list[ICard]: List of `module_id`s of all the agent `Perceptor`s
+            list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Perceptor`s
 
         """
         return self._by_type[ModuleTypes.PERCEPTOR]
@@ -367,7 +402,7 @@ class IDirectory(BaseDirectory):
 
     @property
     def memory(self) -> list[ICard]:
-        """(Property) List of Memory structure info cards.
+        """(Property) List of Memory module info cards.
 
         Returns:
             list[ICard]: List of info cards containing `module_id`s and tags of all the agent `Memory`s
@@ -382,9 +417,11 @@ class IDirectory(BaseDirectory):
         return card
 
     def __getitem__(self, item: str | int) -> ICard:
+        """Return an internal module card by ID or insertion index; see ``BaseDirectory.__getitem__``."""
         return cast(ICard, super().__getitem__(item))
 
     def search(self, tags: Iterable[str]) -> list[ICard]:
+        """Return module cards containing every requested tag; see ``BaseDirectory.search``."""
         return cast(list[ICard], super().search(tags))
 
     def __str__(self) -> str:
@@ -394,6 +431,9 @@ class IDirectory(BaseDirectory):
 class EDirectory(BaseDirectory):
     """
     Directory of all the external entities Orchestrator was aware of during the launch.
+
+    The orchestrator populates this directory when ``mas_rmq_uri`` is configured. It is a snapshot of configured
+    agents and environments, not live service discovery. Entity IDs should be unique within the directory.
     """
     ENVIRONMENT = 'environment'
     AGENT = 'agent'
@@ -415,6 +455,16 @@ class EDirectory(BaseDirectory):
         # super().__init__([env_card])
 
     def add_env(self, env_id: str, address: dict[str, Any], tags: Iterable[str] | None = None) -> ECard:
+        """Register an environment and add its ``environment`` search tag.
+
+        Args:
+            env_id (str): Identifier of the environment.
+            address (dict[str, Any]): Transport connection information; see ``ECard`` for the RabbitMQ fields.
+            tags (Iterable[str], optional): Additional search tags. Defaults to no additional tags.
+
+        Returns:
+            ECard: The registered card, appended after existing entries.
+        """
         tags = list() if tags is None else list(tags)
         if self.ENVIRONMENT not in tags:
             tags.append(self.ENVIRONMENT)
@@ -423,6 +473,16 @@ class EDirectory(BaseDirectory):
         return card
 
     def add_agent(self, agent_id: str, address: Any, tags: Iterable[str] | None = None) -> ECard:
+        """Register an agent and add its ``agent`` search tag.
+
+        Args:
+            agent_id (str): Identifier of the agent, including its copy suffix when applicable.
+            address (Any): Transport connection information. Use an ``ECard`` address dictionary for RabbitMQ.
+            tags (Iterable[str], optional): Additional search tags. Defaults to no additional tags.
+
+        Returns:
+            ECard: The registered card, appended after existing entries.
+        """
         tags = list() if tags is None else list(tags)
         if self.AGENT not in tags:
             tags.append(self.AGENT)
@@ -431,22 +491,30 @@ class EDirectory(BaseDirectory):
         return card
 
     def __getitem__(self, item: str | int) -> ECard:
+        """Return an external entity card by ID or insertion index; see ``BaseDirectory.__getitem__``."""
         return cast(ECard, super().__getitem__(item))
 
     def search(self, tags: Iterable[str]) -> list[ECard]:
+        """Return entity cards containing every requested tag; see ``BaseDirectory.search``."""
         return cast(list[ECard], super().search(tags))
 
     @property
     def environments(self) -> list[ECard]:
+        """All cards tagged ``environment``, in registration order."""
         return self.search([self.ENVIRONMENT])
 
     @property
     def environment(self) -> ECard | None:
+        """First registered environment, or ``None`` if none is registered.
+
+        With several environments, select by ID or search tags when the first entry is not the intended target.
+        """
         envs = self.environments
         return envs[0] if envs else None
 
     @property
     def agents(self) -> list[ECard]:
+        """All cards tagged ``agent``, in registration order."""
         return self.search([self.AGENT])
 
     def __str__(self) -> str:
@@ -456,19 +524,22 @@ class EDirectory(BaseDirectory):
 class Directory:
     """
     A simple container for a pair of internal and external directories.
+
+    Behaviour hooks access this object through ``state.directory``. Internal role properties return ``ICard``
+    objects with ``module_id`` and tags; external lookups return ``ECard`` objects with entity IDs and addresses.
     """
     def __init__(self) -> None:
-                 # env_address: Any | None = None,
-                 # env_tags: Iterable[str] | None = None):
         self._internal = IDirectory()
         self._external = EDirectory()
 
     @property
     def internal(self) -> IDirectory:
+        """Modules belonging to this agent, indexed by ID, role, or tags."""
         return self._internal
 
     @property
     def external(self) -> EDirectory:
+        """Configured external agents and environments, indexed by entity ID or tags."""
         return self._external
 
     def __str__(self) -> str:
@@ -485,7 +556,8 @@ class Belief:
     Attributes:
         predicate (str): predicate name.
         arguments (Any | tuple[Any, ...]): predicate's arguments.
-        extras (dict[str, Any], optional): keyword dictionary of additional relevant information.
+        extras (dict[str, Any], optional): Dictionary of additional relevant information. Defaults to ``None``;
+            supply metadata explicitly through this field.
 
     """
     predicate: str
@@ -497,9 +569,13 @@ class Belief:
 class Goal:
     """Pydantic dataclass for agent's goals.
 
+    When constructing a goal, additional keyword arguments are collected into ``extras``. If an explicit
+    ``extras`` dictionary and extra keyword arguments contain the same key, the keyword argument takes precedence.
+    For example, ``Goal(state=[], extras={'priority': 1}, priority=2)`` stores ``{'priority': 2}`` in ``extras``.
+
     Attributes:
         state (list[Belief]): Belief-based description of the goal state.
-        extras (dict[str, Any]): keyword dictionary of additional relevant information.
+        extras (dict[str, Any]): Dictionary of additional relevant information. Defaults to a new empty dictionary.
 
     """
     state: list[Belief]
@@ -543,8 +619,8 @@ class Observation:
 
     Attributes:
         content (Any): observed object.
-        observation_type (str): type of the observation.
-        value (float, optional): (intrinsic) value of the observation.
+        observation_type (str | None): User-defined type label. Defaults to the string ``'Any'``; may be ``None``.
+        value (float, optional): (Intrinsic) value of the observation. Defaults to ``None`` when unevaluated.
 
     """
     content: Any
@@ -578,6 +654,13 @@ class ConnType:
 class AgentCmd:
     """
     Dataclass for agent commands.
+
+    Attributes:
+        agent_id (str): ID of the agent whose modules should process the command.
+        cmd (str): Command name, normally ``START`` or ``STOP``.
+        args (dict[str, Any] | None): Command payload. ``START`` uses ``start_ts`` (an absolute Unix timestamp in
+            seconds); ``STOP`` uses ``reason`` (a log message). Defaults to ``None``; supply a dictionary when sending
+            these runtime commands.
     """
     START: ClassVar[str] = 'start'
     STOP: ClassVar[str] = 'stop'
@@ -596,6 +679,15 @@ class AgentCmd:
 class StatusReport:
     """
     Dataclass for module's status reports.
+
+    Attributes:
+        agent_id (str): ID of the reporting module's agent.
+        module_id (str): ID of the reporting module within that agent.
+        status (str): Lifecycle status such as ``CREATED``, ``READY``, ``RUNNING``, ``FINISHED``, or ``ERROR``.
+            ``REQUESTING_TERM`` requests an early stop from the root controller; ``TIMEOUT`` denotes a timeout.
+        ts (float): Report time in seconds relative to agent startup, not a Unix timestamp.
+        args (dict[str, Any] | None): Optional details, such as ``error`` text or a termination ``reason``.
+            Defaults to ``None``.
     """
     CREATED: ClassVar[str] = 'CREATED'
     READY: ClassVar[str] = 'READY'
@@ -624,7 +716,10 @@ class StatusReport:
 @dataclass
 class Performatives:
     """
-    Dataclass for performative options.
+    Named string constants for external message intent.
+
+    RabbitMQ environment requests use ``OBSERVE`` or ``ACT``; responses and ordinary agent messages normally use
+    ``INFORM``. Other constants are available to application protocols. Internal module routes use ``ConnType``.
     """
     INFORM: ClassVar[str] = 'inform'
 
@@ -647,6 +742,19 @@ class Performatives:
 class Message:
     """
     Dataclass for message information.
+
+    Attributes:
+        body (Any | dict[str, Any]): Application payload. Built-in module and environment handlers expect a
+            dictionary, with required fields determined by the receiving callback. RabbitMQ serializes the envelope
+            with ``dill``; sending a message does not require JSON-compatible values.
+        sender_id (str): Sending module ID for internal messages, or agent/environment ID for external messages.
+        recipient_id (str): Intended recipient's module ID or external entity ID.
+        ts (float | str): Message timestamp. Framework-generated messages use seconds since the sender's agent
+            startup; internal scheduling expects a numeric agent-relative value.
+        performative (str): Message intent: ``ConnType.send``/``request`` internally or a ``Performatives`` value
+            for external communication.
+        uuid (bytes): Message identifier, generated independently for each instance by default.
+        short_uuid_format (bool): Whether ``id`` exposes the short identifier. Defaults to ``True``.
     """
     body: Any | dict[str, Any]
     sender_id: str
@@ -678,20 +786,27 @@ class Message:
 
     @property
     def id(self) -> str:
+        """Display identifier selected by ``short_uuid_format``."""
         return self.short_id if self.short_uuid_format else self.full_id
 
     @property
     def full_id(self) -> str:
+        """Complete message identifier as a hexadecimal string."""
         return self.uuid.hex()
 
     @property
     def short_id(self) -> str:
+        """Last six identifier bytes as a twelve-character hexadecimal string for logging."""
         return self.uuid[-6:].hex()
 
 
 class Outbox(ABC):
     """
     Abstract base class for module outboxes.
+
+    Module-specific methods enqueue messages. After a behaviour hook returns its ``State``, the runtime sends the
+    pending messages through the registered routes and clears them. Enqueuing a request does not wait for a reply;
+    replies reach the corresponding message callback in a later invocation.
     """
     def __init__(self) -> None:
         self._msgs: dict[tuple[str, str, str | None], list[Any | dict[str, Any]]] = dict()
@@ -741,6 +856,7 @@ class Outbox(ABC):
         return self.__str__()
 
     def clear(self) -> None:
+        """Discard queued messages and reset iteration, preserving any pending termination request."""
         self._msgs.clear()
         self._recipients = list()
         self._next_recipient = -1
@@ -748,15 +864,24 @@ class Outbox(ABC):
 
     def terminate_agent(self, reason: str = 'Manual termination') -> None:
         """
-        Request the root controller to terminate the agent execution by sending the early close command.
+        Request an early stop of the whole agent through its root controller.
 
-        Attributes:
-            reason (str, Optional): the reason to attach to the close request for logging. Defaults to
-                `Manual termination`
+        Call from the behaviour hook that detects completion and returns its state. The runtime processes this
+        request after the hook returns, even when there are no outgoing messages. It reports the request to the root,
+        which coordinates module shutdown and final hooks. This method does not stop the agent synchronously.
+        Repeated calls before processing replace the pending reason. ``on_last`` already runs during shutdown.
+
+        Args:
+            reason (str, optional): Reason attached to the request for logging. Defaults to ``'Manual termination'``.
         """
         self._term_request = reason
 
     def pop_term_request(self) -> tuple[bool, str | None]:
+        """Consume the pending termination request for the runtime.
+
+        Returns:
+            tuple[bool, str | None]: Whether a request existed and its reason; ``(False, None)`` if none existed.
+        """
         request = self._term_request
         self._term_request = None
         return request is not None, request
@@ -765,10 +890,15 @@ class Outbox(ABC):
 class State[T: Outbox]:
     """Container for module's internal state enriched with additional information and functionality.
 
-    State creation is handled by the agent's root controller. Can be used to access agent time, directory of agent
-    module IDs, and to send out messages to other modules.
+    State creation is handled by the corresponding agent's module based on provided initial state parameters. Can be
+        used to access agent time, directory of agent module IDs, and to send out messages to other modules.
 
     T resolves to a module-specific outbox class for convenient hinting when sending messages to other modules.
+
+    Declare persistent custom fields in a module's ``initial_state`` or register them with ``load()``. Existing
+    fields can be updated as attributes or with ``state['field']``. Assigning a previously undeclared name through
+    either syntax does not register it for ``dump()`` or bracket lookup. Use names that do not shadow runtime
+    properties, methods, or private attributes.
 
     """
     def __init__(self, agent_id: str, module_id: str, time_func: Callable[[], float], directory: Directory, outbox: T, **kwargs) -> None:
@@ -814,7 +944,7 @@ class State[T: Outbox]:
 
     @property
     def directory(self) -> Directory:
-        """Agent's directory of module IDs.
+        """Agent's directory of module IDs and external agents and environments.
 
         Returns:
             Directory: directory object containing information about agent's module types and IDs.
@@ -836,9 +966,26 @@ class State[T: Outbox]:
         self._outbox.clear()
 
     def dump(self) -> dict[str, Any]:
+        """Return the registered custom fields for persistence.
+
+        Runtime information such as the directory, clock, and outbox is excluded unless a custom field shadows it.
+        The returned dictionary is new, but its values are the same objects held by the state; no deep copy or
+        serialization is performed here. JSON or dill compatibility is checked later by the chosen serializer.
+
+        Returns:
+            dict[str, Any]: Current values of fields registered at construction or through ``load()``.
+        """
         return {field: self.__dict__[field] for field in self._custom_fields}
 
     def load(self, **kwargs) -> None:
+        """Merge custom fields into the state and register their names for persistence.
+
+        Supplied values replace fields with the same name. Existing fields absent from ``kwargs`` are preserved,
+        which also lets resumed states retain newly introduced initial fields. Values are assigned without copying.
+
+        Args:
+            **kwargs: Field names and values to add or update. Avoid names reserved by the runtime.
+        """
         self._custom_fields.update(kwargs.keys())
         self.__dict__.update(kwargs)
 

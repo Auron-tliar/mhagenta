@@ -19,7 +19,7 @@ class RestReceiver(PerceptorBase):
 
     def on_msg(self, state: PerceptorState, sender: str, msg: dict[str, Any]) -> PerceptorState:
         """
-        Override to define agent's reaction to receiving a message from another agent.
+        Override to define the agent's reaction to receiving a message from another agent.
 
         Args:
             state (PerceptorState): module's internal state enriched with relevant runtime information and
@@ -53,7 +53,7 @@ class RestSender(ActuatorBase):
         Call this method to send a message to another agent.
 
         Args:
-            recipient_addr (Any): receiver's address object. Typically can be accessed via the recipient's directory
+            recipient_addr (Any): receiver's address object. Typically, it can be accessed via the recipient's directory
                 card (e.g. `state.directory.external[<agent_id>].address` if `agent_id` is known).
             msg (dict[str, Any]): message's content. Must be JSON serializable.
         """

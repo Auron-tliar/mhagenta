@@ -30,9 +30,9 @@ GoalGraphState = State[GoalGraphOutbox]
 
 
 class GoalGraphBase(ModuleBase):
-    """Base class for defining Goal graph behavior (also inherits common methods from `ModuleBase`).
+    """Base class for defining Goal graph behaviour (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behaviour, override the base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
@@ -54,13 +54,15 @@ class GoalGraphBase(ModuleBase):
         return state
 
     def on_goal_update(self, state: GoalGraphState, sender: str, goals: Sequence[Goal], **kwargs) -> GoalGraphState:
-        """Override to define goal graph's reaction to receiving a goal update.
+        """Override to define the goal graph's reaction to receiving a goal update. By default, will forward the update
+            to either all high-level reasoners (if the sender is a low-level reasoner) or to all low-level reasoners
+            (if the sender is a high-level reasoner).
 
         Args:
             state (GoalGraphState): Goal graph's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the module (high-level or low-level reasoner) that sent the update.
-            goals (Sequence[Goal]): received collection of goals.
+            goals (Sequence[Goal]): the received collection of goals.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

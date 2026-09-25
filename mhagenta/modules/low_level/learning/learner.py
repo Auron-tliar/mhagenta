@@ -12,17 +12,17 @@ class LearnerOutbox(Outbox):
 
     """
     def request_memories(self, memory_id: str, **kwargs) -> None:
-        """Request a collection of memories from a memory structure.
+        """Request a collection of memories from a memory module.
 
         Args:
-            memory_id (str): `module_id` of the relevant memory structure.
+            memory_id (str): `module_id` of the relevant memory module.
             **kwargs: additional keyword arguments to be included in the message.
 
         """
         self._add(memory_id, ConnType.request, kwargs)
 
     def send_model(self, reasoner_id: str, model: Any, **kwargs) -> None:
-        """Send a learned model to a low-level reasoner.
+        """Send a learned model to a reasoner.
 
         Args:
             reasoner_id (str): `module_id` of the relevant reasoner.
@@ -40,16 +40,16 @@ LearnerState = State[LearnerOutbox]
 
 
 class LearnerBase(ModuleBase):
-    """Base class for defining Learner behavior (also inherits common methods from `ModuleBase`).
+    """Base class for defining Learner behaviour (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behaviour, override the base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
     module_type: ClassVar[str] = ModuleTypes.LEARNER
 
     def on_task(self, state: LearnerState, sender: str, task: Any, **kwargs) -> LearnerState:
-        """Override to define learner's reaction to receiving a learning task.
+        """Override to define the learner's reaction to receiving a learning task.
 
         Args:
             state (LearnerState): Learner's internal state enriched with relevant runtime information and
@@ -65,12 +65,12 @@ class LearnerBase(ModuleBase):
         return state
 
     def on_memories(self, state: LearnerState, sender: str, memories: Sequence[Belief | Observation], **kwargs) -> LearnerState:
-        """Override to define learner's reaction to receiving a collection of memories.
+        """Override to define the learner's reaction to receiving a collection of memories.
 
         Args:
             state (LearnerState): Learner's internal state enriched with relevant runtime information and
                 functionality.
-            sender (str): `module_id` of the memory structure that send the memories.
+            sender (str): `module_id` of the memory module that sent the memories.
             memories (Sequence[Belief | Observation]): received collection of memories.
             **kwargs: additional keyword arguments included in the message.
 
@@ -81,7 +81,7 @@ class LearnerBase(ModuleBase):
         return state
 
     def on_model_request(self, state: LearnerState, sender: str, **kwargs) -> LearnerState:
-        """Override to define learner's reaction to receiving a model request.
+        """Override to define the learner's reaction to receiving a model request.
 
         Args:
             state (LearnerState): Learner's internal state enriched with relevant runtime information and

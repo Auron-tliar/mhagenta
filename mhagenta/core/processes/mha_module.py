@@ -41,6 +41,15 @@ class GlobalParams(BaseModel):
 class ModuleBase:
     """Base class for agent module definitions. Contains templates for all basic functions that define module behaviour.
 
+    Extend one of the role-specific bases in ``mhagenta.bases`` to implement an agent module. Behaviour hooks
+    (``step``, ``on_first``, ``on_last``, and message reactions) are synchronous and must return a ``State``.
+    Keep them short and non-blocking: they run on the module's scheduling loop. ``on_init`` is a separate
+    synchronous setup hook with no state return value.
+
+    Construction records a definition for later execution in a module subprocess. The runtime attaches the agent ID,
+    state, and logger before invoking ``on_init``. They must not be used from a behaviour object's constructor.
+    Hook return values are passed to the runtime, which processes queued outbox messages and termination requests.
+
     """
     module_type: ClassVar[str]
 
@@ -55,7 +64,8 @@ class ModuleBase:
         Args:
             module_id (str): unique (in scope of an agent) ID of the module.
             initial_state (dict[str, Any], optional): dictionary of fields and corresponding values to be inserted into
-                module's internal state at initialization. Later on can be accessed via State.field.
+                the module's internal state at initialization. Later on, it can be accessed via State.field. These names
+                are registered for persistence; avoid names belonging to State's runtime properties or methods.
             init_kwargs (dict[str, Any], optional): keyword arguments to be passed to the `on_init` method.
             tags (Iterable[str], optional): a list of tags associated with this module for directory search.
         """
@@ -96,8 +106,13 @@ class ModuleBase:
     def on_init(self, **kwargs) -> None:
         """Called after the module finished initializing
 
+        ``self.agent_id``, ``self.state``, and ``self.log()`` are available here. If resuming, saved fields have already
+        been merged into the initial state. Execution has not yet been scheduled, so ``self.state.time`` may be
+        ``None``. Use this hook for setup and keep its return value ``None``; normal state-returning hooks process
+        their outbox when they return.
+
         Args:
-            **kwargs: additional keyword arguments. Their values need to be passed to the module constructor.
+            **kwargs: Additional keyword arguments supplied through the constructor's ``init_kwargs`` dictionary.
 
         """
         pass
@@ -115,7 +130,11 @@ class ModuleBase:
         return state
 
     def on_last(self, state: State) -> State:
-        """Called right after agent's execution stop is initiated, the last behavioral action module can take.
+        """Called right after the agent's execution stop is initiated, the last behavioural action module can take.
+
+        The runtime processes the returned state and attempts a final save before closing module communication.
+        Use this hook to finish state bookkeeping. Request early completion from a normal running hook instead,
+        since shutdown is already underway here.
 
         Args:
             state: module's internal state enriched with relevant runtime information and functionality.
@@ -132,7 +151,7 @@ class ModuleBase:
 
     @property
     def is_reactive(self) -> bool:
-        """Shows whether the module is reactive (i.e. if it has internal action loop or just reacts to communications).
+        """Shows whether the module is reactive (i.e. if it has the internal step loop or just reacts to communications).
 
         Returns:
             bool: True if the module is reactive, otherwise False.
@@ -142,10 +161,16 @@ class ModuleBase:
 
     @property
     def agent_id(self) -> str:
+        """Owning agent's ID once attached to a runtime; ``None`` on an unattached behaviour definition."""
         return self._agent_id
 
     @property
     def state(self) -> State:
+        """Current module state, available from ``on_init`` onward.
+
+        Assigning this property passes the replacement state through the runtime's update processing, including
+        autosave when configured, queued messages, and termination requests. Normal hooks should return their states.
+        """
         return self._state_getter()
 
     @state.setter
@@ -155,6 +180,8 @@ class ModuleBase:
     def log(self, level: int, message: str) -> None:
         """
         Log a message via the agent internal logging system
+
+        Available after the behaviour has been attached to its module runtime, including inside ``on_init``.
 
         Args:
             level (int): log level
@@ -473,6 +500,20 @@ class MHAModule(MHAProcess):
         tmp_path.replace(path)
 
     def save_state(self) -> None:
+        """Attempt to persist registered custom fields from ``State.dump()``.
+
+        Files are written beneath the configured save directory as ``<agent_id>.<module_id>.json`` for JSON or
+        ``<agent_id>.<module_id>.sav`` for dill. JSON uses the standard serializer without custom encoders; choose
+        dill for fields requiring Python object serialization and make their defining modules available on reload.
+
+        A new snapshot is serialized to ``<filename>.tmp`` before replacing the primary file. An existing primary
+        is first copied to ``<filename>.backup``. Save errors are logged as warnings and do not propagate to the
+        caller; a failed write attempt may leave a temporary file.
+
+        The runtime calls this after ``on_last`` and according to ``state_autosave_interval``: ``-1`` disables
+        autosaving, ``0`` saves each processed behaviour update, and a positive value schedules periodic saves
+        at that interval in seconds. ``on_init`` is not a state-returning behaviour update.
+        """
         try:
             path = Path(self._save_dir)
             path.mkdir(exist_ok=True)
@@ -489,6 +530,24 @@ class MHAModule(MHAProcess):
             self.warning(f'Failed to save state! Reason: {type(ex)}({ex})! Resuming execution...')
 
     def load_state(self, backup: bool = False) -> None:
+        """Read a saved snapshot and merge its custom fields into the current state.
+
+        Uses the configured format and the filenames described by ``save_state()``. Fields present in the snapshot
+        replace initial values; initial fields absent from the snapshot remain. Runtime fields and outbox contents
+        are not restored by normal snapshots.
+
+        When ``resume=True``, module construction first loads the primary file, then tries the backup if the primary
+        cannot be loaded. This method itself makes only the requested attempt. If both construction-time attempts
+        fail, the second failure propagates and the module cannot finish construction.
+        Deserialization and field-loading errors also propagate to the caller.
+
+        Args:
+            backup (bool, optional): Read ``<filename>.backup`` instead of the primary snapshot. Defaults to False.
+
+        Raises:
+            OSError: The requested file cannot be opened, including when it is missing.
+            ValueError: The configured save format is unsupported.
+        """
         path = Path(self._save_dir) / f'{self._agent_id}.{self._module_id}.sav'
         match self._save_format:
             case 'json':

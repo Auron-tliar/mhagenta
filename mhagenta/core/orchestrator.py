@@ -249,7 +249,15 @@ class Orchestrator:
     """Orchestrator class that handles MHAgentA execution.
 
     Orchestrator handles definition of agents and their consequent containerization and deployment. It also allows you
-    to define default parameters shared by all the agents handles by it (can be overridden by individual agents)
+    to define default parameters shared by all the agents handled by it (can be overridden by individual agents)
+
+    Construction creates the output directory and a Docker client, so Docker must be available even before ``run()``.
+    Agent and environment definitions are serialized into their images. Rebuild the corresponding images after
+    changing configuration, behaviour, dependencies, or packaged sources; reusing an image reuses its embedded inputs.
+
+    Module snapshots are stored under ``<save_dir>/<agent_id>/out/``. Multiple copies use IDs and output directories
+    ``<agent_id>_0``, ``<agent_id>_1``, and so on. Environment snapshots use ``<save_dir>/<env_id>/out/``. Container
+    logs are saved separately as ``<entity_id>.log`` in the root save directory when log saving is enabled.
 
     """
     SAVE_SUBDIR = 'out'
@@ -299,19 +307,19 @@ class Orchestrator:
             step_frequency (float, optional, default=1.0): For agent modules with periodic step functions, the
                 frequency in seconds of the step function calls that modules will try to maintain (unless their
                 execution takes longer, then the next iteration will be scheduled without a time delay).
-            status_frequency (float, optional, default=10.0): Frequency with which agent modules will report their
+            status_frequency (float, optional, default=5.0): Frequency with which agent modules will report their
                 statuses to the agent's root controller (error statuses will be reported immediately, regardless of
                 the value).
-            control_frequency (float, optional): Frequency of agent modules' internal clock when there's no tasks
+            control_frequency (float, optional): Frequency of agent modules' internal clock when there are no tasks
                 pending. If undefined or not positive, there will be no scheduling delay.
             exec_start_time (float, optional): Unix timestamp in seconds of when the agent's execution will try to
-                start (unless agent's initialization takes longer than that; in this case the agent will start
+                start (unless the agent's initialization takes longer than that; in this case the agent will start
                 execution as soon as it finishes initializing). If not specified, agents will start execution
                 immediately after their initialization.
-            agent_start_delay (float, optional, default=60.0): Delay in seconds before agents starts execution. Use when
+            agent_start_delay (float, optional, default=60.0): Delay in seconds before agents start execution. Use when
                 `exec_start_time` is not defined to stage synchronous agents start at `agent_start_delay` seconds from
                 the `run()` or `arun()` call.
-            exec_duration (float, optional, default=60.0):  Time limit for agent execution in seconds. All agents will
+            exec_duration (float, optional, default=60.0): Time limit for agent execution in seconds. All agents will
                 time out after this time.
             save_format (Literal['json', 'dill'], optional, default='json'): Format of agent modules state save files. JSON
                 is more restrictive of what fields the states can include, but it is readable by humans.
@@ -336,7 +344,8 @@ class Orchestrator:
             no_stdout_logs (bool, optional, default=False): Whether to suppress stdout logs. Defaults to False.
             state_autosave_interval (float | int, optional, default=-1): interval at each to save module state to a
                 file. If -1, will only save state at the end of the execution; if 0, will save after every
-                behavioural method call.
+                processed behavioural state update. Positive values schedule saves at that interval in seconds.
+                Values must be finite numbers; negative values other than -1 and booleans are rejected.
             module_term_timeout (float | int, optional, default=60.): grace period in seconds for modules to terminate
                 after the execution time has finished. If a module does not terminate within this time, it will be
                 killed by the root controller. If 0, terminate immediately upon execution timeout.
@@ -477,18 +486,24 @@ class Orchestrator:
         """
         Add a configuration of an environment to build at the runtime.
 
+        The built-in runtime is ``RMQEnvironment``. ``base`` supplies synchronous observation/action behaviour;
+        the runtime owns transport, shutdown, and state saving. Configuration and dependencies are embedded in the
+        environment image, so rebuild it after changing them. ``init_script`` runs with ``sh`` during the image
+        build, followed by installation from ``requirements_path``.
+
         Args:
             base (MHAEnvBase): The base environment object implementing the environment behaviour.
             env_id (str): Unique identifier for the environment. Defaults to 'environment'.
-            host (str, optional): RabbitMQ host address; will use one from the Orchestrator if None. Defaults to 'localhost'.
+            host (str, optional): RabbitMQ host address; will use one from the Orchestrator if None. Defaults to
+                'localhost'.
             port (int, optional): RabbitMQ port; will use one from the Orchestrator if None. Defaults to 5672.
-            exec_duration (float, optional): execution duration of the environment, will derive from the Orchestrator
+            exec_duration (float, optional): execution duration of the environment; will derive from the Orchestrator
                 configuration if None. Defaults to None.
             exchange_name (str, optional): Name of RabbitMQ exchange for inter-agent communication. Will use the default
                 one for MAS if None. Defaults to None.
-            init_script (os.PathLike | str, optional): Path to an optional bash script to be run before launching the environment.
-                Use it to install additional non-Python dependencies. Defaults to None.
-            requirements_path (os.PathLike | str, optional): Path to Python dependencies file. Defaults to None.
+            init_script (os.PathLike | str, optional): Path to an optional shell script to be run during the container
+                image build. Use it to install additional non-Python dependencies. Defaults to None.
+            requirements_path (os.PathLike | str, optional): Path to a Python dependencies file. Defaults to None.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
                 Defaults to the Orchestrator's `port_mapping`.
             log_tags (list[str], optional): List of tags to add to log messages. Defaults to None.
@@ -497,11 +512,19 @@ class Orchestrator:
             tags (Iterable[str], optional): List of tags for agent directory. Defaults to None.
             extra_runtime_sources (os.PathLike | str | Iterable[os.PathLike | str], optional): Additional *local*
                 runtime sources to be added to the environment's execution context. Use `requirements_path` to add
-                third-party modules. Defaults to None.
+                third-party modules. Supply standalone ``.py`` files or package directories containing ``__init__.py``
+                with importable names, rather than a repository root or a nested module file. Sources are copied
+                beneath ``/agent`` and must not collide with automatically copied sources or launcher files.
+                Defaults to None.
             gpu_device_ids (str | int | Iterable[str | int] | Literal['all', 'any', 'none'] | None, optional,
                 default='none'): GPU device IDs to expose to the environment's container. If `None`, will use the
                 Orchestrator's value. If 'all', will expose all available GPUs. If 'any', will expose a single available
                 GPU. If 'none' (default), will not expose any GPU.
+
+        Raises:
+            ValueError: No broker URI is available when ``host=None``, or a runtime source has an unsupported shape
+                or non-importable name.
+            FileNotFoundError: An explicit runtime source does not exist.
         """
         from mhagenta.defaults.communication.rabbitmq import RMQEnvironment
         if host is None:
@@ -615,17 +638,28 @@ class Orchestrator:
         This can be either a single agent, a set of identical agents following the same structure model. For the
         majority of optional arguments, if they are left `None`, will default to the Orchestrator's configuration.
 
+        ``perceptors``, ``actuators``, and ``ll_reasoners`` are required arguments even for a topology that omits a
+        role: pass an empty list for that role. Use reusable collections such as lists or tuples for module groups,
+        since composition inspects them before building the image. Module IDs must be unique across all roles of
+        an agent, and at least one module is needed by the agent runtime.
+
+        ``initial_state`` belongs to each module definition. With ``resume=True``, the runtime merges its saved
+        fields before ``on_init`` and attempts a ``.backup`` file if the primary cannot be loaded. Preserve existing
+        snapshots when resuming: the ``force_run`` build path can remove the corresponding output directory.
+
         Args:
             agent_id (str): A unique identifier for the agent.
-            perceptors (Iterable[PerceptorBase] | PerceptorBase): Definition(s) of agent's perceptor(s).
-            actuators (Iterable[ActuatorBase] | ActuatorBase): Definition(s) of agent's actuator(s).
-            ll_reasoners (Iterable[LLReasonerBase] | LLReasonerBase): Definition(s) of agent's ll_reasoner(s).
-            learners (Iterable[LearnerBase] | LearnerBase, optional): Definition(s) of agent's learner(s).
-            knowledge (Iterable[KnowledgeBase] | KnowledgeBase, optional): Definition(s) of agent's knowledge model(s).
-            hl_reasoners (Iterable[HLReasonerBase] | HLReasonerBase, optional): Definition(s) of agent's hl_reasoner(s).
-            goal_graphs (Iterable[GoalGraphBase] | GoalGraphBase, optional): Definition(s) of agent's goal_graph(s).
-            memory (Iterable[MemoryBase] | MemoryBase, optional): Definition(s) of agent's memory structure(s).
-            num_copies (int, optional, default=1): Number of copies of the agent to instantiate at runtime.
+            perceptors (Iterable[PerceptorBase] | PerceptorBase): Definition(s) of the agent's perceptor(s).
+            actuators (Iterable[ActuatorBase] | ActuatorBase): Definition(s) of the agent's actuator(s).
+            ll_reasoners (Iterable[LLReasonerBase] | LLReasonerBase): Definition(s) of the agent's ll_reasoner(s).
+            learners (Iterable[LearnerBase] | LearnerBase, optional): Definition(s) of the agent's learner(s).
+            knowledge (Iterable[KnowledgeBase] | KnowledgeBase, optional): Definition(s) of the agent's knowledge model(s).
+            hl_reasoners (Iterable[HLReasonerBase] | HLReasonerBase, optional): Definition(s) of the agent's hl_reasoner(s).
+            goal_graphs (Iterable[GoalGraphBase] | GoalGraphBase, optional): Definition(s) of the agent's goal_graph(s).
+            memory (Iterable[MemoryBase] | MemoryBase, optional): Definition(s) of the agent's memory module(s).
+            num_copies (int, optional, default=1): Number of copies of the agent to instantiate at runtime. With
+                multiple copies, runtime IDs are ``<agent_id>_0``, ``<agent_id>_1``, and so on, each with its own
+                output directory.
             step_frequency (float, optional): For agent modules with periodic step functions, the frequency in seconds
                 of the step function calls that modules will try to maintain (unless their execution takes longer, then
                 the next iteration will be scheduled without a time delay). Defaults to the Orchestrator's
@@ -633,11 +667,11 @@ class Orchestrator:
             status_frequency (float, optional): Frequency with which agent modules will report their statuses to the
                 agent's root controller (error statuses will be reported immediately, regardless of the value).
                 Defaults to the Orchestrator's `status_frequency`.
-            control_frequency (float, optional): Frequency of agent modules' internal clock when there's no tasks
+            control_frequency (float, optional): Frequency of agent modules' internal clock when there are no tasks
                 pending. If undefined or not positive, there will be no scheduling delay. Defaults to the
                 Orchestrator's `control_frequency`.
             exec_start_time (float, optional): Unix timestamp in seconds of when the agent's execution will try to
-                start (unless agent's initialization takes longer than that; in this case the agent will start
+                start (unless the agent's initialization takes longer than that; in this case the agent will start
                 execution as soon as it finishes initializing). Defaults to the Orchestrator's `exec_start_time`.
             start_delay (float, optional, default=0.0): A time offset from the global execution time start when this agent will
                 attempt to start its own execution.
@@ -647,28 +681,41 @@ class Orchestrator:
                 preexisting ID. Defaults to the Orchestrator's `resume`.
             init_script (os.PathLike | str, optional): Path to an optional bash script to be run before launching the agent.
                 Use it to install additional non-Python dependencies. Defaults to None.
-            requirements_path (os.PathLike | str, optional): Additional Python requirements to install on agent side.
-            log_level (int, optional):  Logging level for the agent. Defaults to the Orchestrator's `log_level`.
+            requirements_path (os.PathLike | str, optional): Additional Python requirements to install on the agent side.
+                Passed to ``pip install -r`` during image building, after ``init_script`` runs with ``sh``.
+            log_level (int, optional): Logging level for the agent. Defaults to the Orchestrator's `log_level`.
             port_mapping (dict[int, int], optional): Mapping between internal docker container ports and host ports.
                 Defaults to the Orchestrator's `port_mapping`.
-            connector_cls (type[Connector], optional): internal connector class that implements communication between
+            connector_cls (type[Connector], optional): an internal connector class that implements communication between
                 modules. Defaults to the Orchestrator's `connector_cls`.
             connector_kwargs (dict[str, Any], optional): Additional keyword arguments for connector. Defaults to
                 the Orchestrator's `connector_kwargs`.
             tags (Iterable[str], optional): a list of tags associated with this agent for directory search.
             extra_runtime_sources (os.PathLike | str | Iterable[os.PathLike | str], optional): Additional *local*
                 runtime sources to be added to the agent's execution context. Use `requirements_path` to add
-                third-party modules. Defaults to None.
+                third-party modules. Supply standalone ``.py`` files or package directories containing ``__init__.py``
+                with importable names. Pass a package directory instead of its ``__init__.py`` or a nested module
+                file. Sources are copied beneath ``/agent``; different sources must not target the same path or
+                overwrite automatically copied behaviour sources or launcher files. Defaults to None.
             state_autosave_interval (float | int, optional): interval at each to save module state to a
-                file. If -1, will only save state at the end of the execution; if 0, will save after every behavioural
-                method call. Defaults to None.
-            module_term_timeout (float | int, optional): grace period in seconds for modules to terminate
+                file. If -1, will only save state at the end of the execution; if 0, will save after every processed
+                behavioural state update. Positive values specify a periodic save interval in seconds. Values must
+                be finite numbers; negative values other than -1 and booleans are rejected. Defaults to None,
+                inheriting the Orchestrator's value.
+            module_term_timeout (float | int, optional): the grace period in seconds for modules to terminate
                 after the execution time has finished. If a module does not terminate within this time, it will be
                 killed by the root controller. Defaults to None.
-            gpu_device_ids (str | int | Iterable[str | int] | Literal['all', 'any', 'none'], optional): GPU device IDs
-                to expose to the agent's container. If `None`, will use the Orchestrator's value. If 'all', will expose
-                all available GPUs. If 'any', will expose a single available GPU. If 'none' (default), will not expose
-                any GPU.
+            gpu_device_ids (str | int | Iterable[str | int] | Literal['all', 'any', 'none'], optional, default=None):
+                GPU device IDs to expose to the agent's container. If `None`, will use the Orchestrator's value. If
+                'all', will expose all available GPUs. If 'any', will expose a single available GPU. If 'none', will not
+                expose any GPU. If None, will inherit the Orchestrator's value. Defaults to None.
+
+        Raises:
+            KeyError: The agent ID has already been registered.
+            ValueError: Module IDs are duplicated, an interval is out of range, or a runtime source has an
+                unsupported shape or non-importable name.
+            TypeError: A validated interval or GPU selection has an unsupported type.
+            FileNotFoundError: An explicit runtime source does not exist.
         """
         if agent_id in self._agents:
             raise KeyError(f'Agent with ID "{agent_id}" already exists!')
@@ -1202,10 +1249,16 @@ class Orchestrator:
     ) -> None:
         """Run all the agents as an async method. Use in case you want to control the async task loop yourself.
 
+        Await this coroutine from an existing event loop. Image preparation uses synchronous Docker operations
+        before the container tasks begin. ``rebuild_agents=False`` or ``rebuild_envs=False`` requires an existing
+        image and reuses its saved configuration, behaviour definitions, dependencies, and runtime sources.
+        Keep rebuilding enabled when those inputs change. Rebuilding with ``force_run=True`` can remove the
+        existing output directory and its snapshots, independently of whether an old container still exists.
+
         Args:
             mhagenta_version (str, optional): Version of mhagenta base container. Defaults to 'latest'.
-            force_run (bool, optional, default=False): In case containers with some of the specified agent IDs exist,
-                specify whether to force remove the old container to run the new ones. Otherwise, an exception will be
+            force_run (bool, optional, default=False): If true and containers with specified IDs already exist, will
+                remove them as well as the corresponding save folder content, if any. Otherwise, an exception will be
                 raised.
             gui (bool, optional, default=False): Specifies whether to open the log monitoring window for the
                 orchestrator.
@@ -1290,6 +1343,11 @@ class Orchestrator:
             keep_containers: bool = False
     ) -> None:
         """Run all the agents.
+
+        This synchronous entry point wraps ``arun()`` in ``asyncio.run()``. From an already running event loop, await
+        ``arun()`` instead. Reusing agent/environment images also reuses their embedded configuration and packaged
+        sources; rebuild after changing those inputs. Rebuilding with ``force_run=True`` can remove the existing
+        output directory and its snapshots, independently of whether an old container still exists.
 
         Args:
             mhagenta_version (str, optional): Version of mhagenta base container. Defaults to 'latest'.

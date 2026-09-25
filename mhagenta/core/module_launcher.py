@@ -1,3 +1,13 @@
+"""Subprocess entry point used by an agent root to reconstruct one module.
+
+Usage: ``python module_launcher.py <params_path>``. The root writes a dill dictionary containing ``class`` (a
+``ModuleTypes`` name) and ``kwargs`` (including serialized ``base`` and ``global_params``). This script loads and
+then deletes that parameter file before reconstructing the behaviour and running its module runtime. The file is
+a disposable launch input, not a state snapshot. State paths and connection settings come from ``global_params``.
+
+Users normally launch experiments through ``Orchestrator`` rather than invoking this script directly.
+"""
+
 import asyncio
 import os
 from pathlib import Path

@@ -18,14 +18,29 @@ from mhagenta.utils.common import MHABase, DEFAULT_LOG_FORMAT, AgentTime, Messag
 class MHAEnvBase:
     """
     Behaviour base-class for MHAEnvironment
+
+    Extend this class with synchronous observation and action handlers, then pass an instance to
+    ``Orchestrator.add_environment()``. Each handler receives the runtime's current state dictionary; use that
+    argument when constructing a replacement state. The runtime owns transport, timeout, and persistence.
+    Keep handlers short and non-blocking because they run on the environment's event loop.
     """
     def __init__(self, init_state: dict[str, Any] | None) -> None:
+        """Set the environment's initial state.
+
+        Args:
+            init_state (dict[str, Any] | None): Initial state dictionary, kept by reference. This argument is required;
+                pass ``None`` for a new empty dictionary. Environment state does not use the module ``State`` wrapper.
+        """
         self.state = init_state if init_state is not None else {}
         self._log_func: Callable[[int, str], None] | None = None
 
     def on_observe(self, state: dict[str, Any], sender_id: str, **kwargs) -> tuple[dict[str, Any], dict[str, Any]]:
         """
         Override to define what environment returns when observed by agents,
+
+        The default returns the unchanged state and an empty response. Every successful invocation returns a pair and
+        sends the response dictionary, including an empty dictionary. Response keys become keyword arguments to
+        subscribed RabbitMQ perceptors' ``on_observation`` hooks; no ``Observation`` wrapper is added automatically.
 
         Args:
             state (dict[str, Any]): state of environment
@@ -43,14 +58,19 @@ class MHAEnvBase:
         """
         Override to define the effects of an action on the environment.
 
+        Returning only a state dictionary, or ``(state, None)``, updates the state without sending a response. Return
+        ``(state, response)`` to send an action status; an empty response dictionary still produces a message.
+        Response keys become keyword arguments to subscribed RabbitMQ actuators' ``on_status`` hooks.
+        The default returns the unchanged state without a response.
+
         Args:
             state (dict[str, Any]): state of environment
             sender_id (str): sender agent id
             **kwargs: keyword-based description of an action
 
         Returns:
-            dict[str, Any] | tuple[dict[str, Any], dict[str, Any] | None]: tuple of modified state and optional keyword-based action
-            response
+            dict[str, Any] | tuple[dict[str, Any], dict[str, Any] | None]: Updated state alone, or a pair of the updated
+                state and an optional keyword-based action response.
 
         """
         return state
@@ -71,6 +91,11 @@ class MHAEnvBase:
 class MHAEnvironment(MHABase, ABC):
     """
     Base class for MHAgentA environments
+
+    Transport implementations supply the async ``initialize``, ``on_start``, and ``on_stop`` methods and the
+    synchronous ``send_response`` method. Application observation/action behaviour belongs in ``MHAEnvBase``.
+    The environment launcher awaits ``initialize()`` and then ``start()``. A timeout or SIGINT/SIGTERM request
+    runs the transport's stop hook and then saves the current state when a save directory is configured.
     """
 
     def __init__(self,
@@ -86,6 +111,27 @@ class MHAEnvironment(MHABase, ABC):
                  log_format: str = DEFAULT_LOG_FORMAT,
                  tags: Iterable[str] | None = None
                  ) -> None:
+        """Configure a transport-backed environment runtime.
+
+        Construction installs SIGINT and SIGTERM handlers and must take place in the main thread.
+
+        Args:
+            base (MHAEnvBase): Behaviour definition and initial state.
+            env_id (str, optional): Environment identifier used for routing and save filenames. Defaults to
+                ``'environment'``.
+            exec_duration (float, optional): Seconds to wait after ``start()`` before initiating shutdown.
+                Defaults to 60. The orchestrator may adjust this value when scheduling an environment.
+            start_time_reference (float, optional): Unix timestamp used as the origin for environment timestamps.
+                Defaults to construction time. This sets the clock reference; ``start()`` starts the timeout timer.
+            save_dir (os.PathLike, optional): Directory for the final state snapshot. Defaults to None, disabling
+                persistence. Path strings are also accepted by the underlying ``Path`` conversion.
+            save_format (Literal['json', 'dill'], optional): Snapshot serializer. Defaults to ``'json'``.
+            log_id (str, optional): Final logging tag. Defaults to the runtime class name.
+            log_tags (list[str], optional): Initial logging tags. Defaults to the environment ID.
+            log_level (int | str, optional): Logging threshold. Defaults to ``logging.DEBUG``.
+            log_format (str, optional): Logging format. Defaults to ``DEFAULT_LOG_FORMAT``.
+            tags (Iterable[str], optional): Environment tags for directory searches. Defaults to no tags.
+        """
         super().__init__(
             agent_id=env_id,
             log_id=log_id,
@@ -131,6 +177,11 @@ class MHAEnvironment(MHABase, ABC):
         pass
 
     async def start(self) -> None:
+        """Run the transport start hook and wait for timeout or a signal requesting shutdown.
+
+        Call ``initialize()`` first. This coroutine creates the task group used by transport implementations and
+        returns after its tasks finish, including the timeout/signal path through ``stop()``.
+        """
         async with asyncio.TaskGroup() as tg:
             self._main_task_group = tg
             tg.create_task(self.on_start())
@@ -148,6 +199,7 @@ class MHAEnvironment(MHABase, ABC):
         pass
 
     async def stop(self) -> None:
+        """Await transport shutdown, then save the current state if persistence is configured."""
         self.progress('Stopping environment...')
         await self.on_stop()
         if self._save_dir is not None:
@@ -157,16 +209,13 @@ class MHAEnvironment(MHABase, ABC):
     @abstractmethod
     def send_response(self, recipient_id: str, channel: str, msg: Message, **kwargs) -> None:
         """
-        Sends response to an agent request.
+        Sends the response to an agent request.
 
         Args:
             recipient_id (str): recipient agent id
             channel (str): communication channel (if used)
-            msg (dict[str, Any]): response body
+            msg (Message): response message
             **kwargs: additional keyword arguments for the response
-
-        Returns:
-
         """
         pass
 
@@ -219,6 +268,16 @@ class MHAEnvironment(MHABase, ABC):
         self._stop_event.set()
 
     def save_state(self) -> None:
+        """Write the entire environment state to its configured directory.
+
+        The filename is ``<env_id>.json`` for JSON or ``<env_id>.sav`` for dill. JSON requires standard
+        JSON-serializable values. If no save directory is configured, nothing is written. Environment snapshots
+        are overwritten directly; this runtime does not implement the module backup/resume mechanism.
+        Filesystem and serialization errors propagate to the caller.
+
+        Raises:
+            ValueError: The configured save format is unsupported.
+        """
         if self._save_dir is None:
             return
         path = self._save_dir

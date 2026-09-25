@@ -6,16 +6,16 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class KnowledgeOutbox(Outbox):
-    """Internal communication outbox class for Knowledge model.
+    """Internal communication outbox class for Knowledge module.
 
     Used to store and process outgoing messages to other modules.
 
     """
     def send_observations(self, memory_id: str, observations: Iterable[Observation], **kwargs) -> None:
-        """Send evaluated observations as memories to a memory structure.
+        """Send evaluated observations as memories to a memory module.
 
         Args:
-            memory_id (str): `module_id` of the relevant memory structure.
+            memory_id (str): `module_id` of the relevant memory module.
             observations (Iterable[Observation]): a collection of evaluated observations to send.
             **kwargs: additional keyword arguments to be included in the message.
 
@@ -26,10 +26,10 @@ class KnowledgeOutbox(Outbox):
         self._add(memory_id, ConnType.send, body, 'observations')
 
     def send_belief_memories(self, memory_id: str, beliefs: Iterable[Belief], **kwargs) -> None:
-        """Send beliefs as memories to a memory structure.
+        """Send beliefs as memories to a memory module.
 
         Args:
-            memory_id (str): `module_id` of the relevant memory structure.
+            memory_id (str): `module_id` of the relevant memory module.
             beliefs (Iterable[Belief]): a collection of beliefs to send.
             **kwargs: additional keyword arguments to be included in the message.
 
@@ -43,7 +43,7 @@ class KnowledgeOutbox(Outbox):
         """Send a collection of beliefs to a high-level reasoner.
 
         Args:
-            hl_reasoner_id (str): `module_id` of the relevant high-level reasoner structure.
+            hl_reasoner_id (str): `module_id` of the relevant high-level reasoner module.
             beliefs: a collection of beliefs to send.
             **kwargs: additional keyword arguments to be included in the message.
 
@@ -59,25 +59,25 @@ KnowledgeState = State[KnowledgeOutbox]
 
 
 class KnowledgeBase(ModuleBase):
-    """Base class for defining Knowledge model behavior (also inherits common methods from `ModuleBase`).
+    """Base class for defining Knowledge model behaviour (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behaviour, override the base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
     module_type: ClassVar[str] = ModuleTypes.KNOWLEDGE
 
     def on_observed_beliefs(self, state: KnowledgeState, sender: str, observation: Observation, beliefs: Sequence[Belief], **kwargs) -> KnowledgeState:
-        """Override to define knowledge model's reaction to receiving a belief update.
+        """Override to define the knowledge module's reaction to receiving a belief update.
 
         Forwards the observed beliefs to all high-level reasoners by default.
 
         Args:
-            state (KnowledgeState): Knowledge model's internal state enriched with relevant runtime information and
+            state (KnowledgeState): Knowledge module's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the low-level reasoner that sent the beliefs.
             observation (Observation): Observation from which the beliefs were extracted.
-            beliefs (Sequence[Belief]): received collection of beliefs.
+            beliefs (Sequence[Belief]): the received collection of beliefs.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -89,13 +89,13 @@ class KnowledgeBase(ModuleBase):
         return state
 
     def on_belief_update(self, state: KnowledgeState, sender: str, beliefs: Sequence[Belief], **kwargs) -> KnowledgeState:
-        """Override to define knowledge model's reaction to receiving a belief update.
+        """Override to define the knowledge module's reaction to receiving a belief update.
 
         Args:
-            state (KnowledgeState): Knowledge model's internal state enriched with relevant runtime information and
+            state (KnowledgeState): Knowledge module's internal state enriched with relevant runtime information and
                 functionality.
-            sender (str): `module_id` of high-level reasoner that sent the beliefs.
-            beliefs (Sequence[Belief]): received collection of beliefs.
+            sender (str): `module_id` of the high-level reasoner that sent the beliefs.
+            beliefs (Sequence[Belief]): the received collection of beliefs.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -105,10 +105,10 @@ class KnowledgeBase(ModuleBase):
         return state
 
     def on_belief_request(self, state: KnowledgeState, sender: str, **kwargs) -> KnowledgeState:
-        """Override to define knowledge model's reaction to receiving a belief request.
+        """Override to define the knowledge module's reaction to receiving a belief request.
 
         Args:
-            state (KnowledgeState): Knowledge model's internal state enriched with relevant runtime information and
+            state (KnowledgeState): Knowledge module's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the high-level reasoner that sent the request.
             **kwargs: additional keyword arguments included in the message.

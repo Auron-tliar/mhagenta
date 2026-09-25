@@ -10,8 +10,22 @@ from mhagenta.utils import Message, Performatives
 class RMQReceiverBase(PerceptorBase):
     """
     Extended receiver (Perceptor) base class for inter-agent communication.
+
+    Subclass ``on_message`` to process received dictionaries and return the updated ``PerceptorState``. The runtime
+    establishes the external connection before ``on_init`` and queues incoming messages for behaviour processing.
     """
     def __init__(self, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta', **kwargs):
+        """Configure the external inbox for this agent.
+
+        Args:
+            host (str, optional): RabbitMQ host reachable from the module process. Defaults to ``'localhost'``;
+                the orchestrator rewrites this hostname for external modules running in containers.
+            port (int, optional): RabbitMQ AMQP port. Defaults to 5672.
+            exchange_name (str, optional): Exchange shared with sender modules. Defaults to ``'mhagenta'``.
+            **kwargs: ``ModuleBase`` constructor arguments, including required ``module_id`` and optional
+                ``initial_state``, ``init_kwargs``, and ``tags``. Supply tags as a list because this class adds its
+                external communication tags to it.
+        """
         super().__init__(**kwargs)
         # self._agent_id = agent_id
         self.tags.extend(['external', 'receiver', 'rmq', 'messaging'])
@@ -49,13 +63,17 @@ class RMQReceiverBase(PerceptorBase):
 
     def on_message(self, state: PerceptorState, sender: str, msg: dict[str, Any]) -> PerceptorState:
         """
-        Override to define agent's reaction to receiving a message from another agent.
+        Override to define the agent's reaction to receiving a message from another agent.
 
         Args:
             state (PerceptorState): module's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): sender's `agent_id`.
             msg (dict[str, Any]): message's content.
+
+        Returns:
+            PerceptorState: Updated or unchanged state for runtime processing. An override must return the state;
+                this base hook is a placeholder and does not supply a default response.
         """
         pass
 
@@ -95,8 +113,21 @@ class RMQReceiverBase(PerceptorBase):
 class RMQSenderBase(ActuatorBase):
     """
     Extended sender (Actuator) base class for inter-agent communication.
+
+    Call ``send()`` from an initialized behaviour hook to publish directly through the external connector.
+    The recipient's receiver must use the same broker and exchange. Internal module messages still use the outbox.
     """
     def __init__(self, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta', **kwargs):
+        """Configure publishing to other agents.
+
+        Args:
+            host (str, optional): RabbitMQ host reachable from the module process. Defaults to ``'localhost'``;
+                the orchestrator rewrites this hostname for external modules running in containers.
+            port (int, optional): RabbitMQ AMQP port. Defaults to 5672.
+            exchange_name (str, optional): Exchange shared with receiver modules. Defaults to ``'mhagenta'``.
+            **kwargs: ``ModuleBase`` constructor arguments, including required ``module_id`` and optional
+                ``initial_state``, ``init_kwargs``, and list-valued ``tags``. External communication tags are appended.
+        """
         super().__init__(**kwargs)
         # self._agent_id = agent_id
         self.tags.extend(['external', 'sender', 'rmq', 'messaging'])
@@ -135,10 +166,12 @@ class RMQSenderBase(ActuatorBase):
         """
         Call this method to send a message to another agent.
 
+        Sender's `agent_id` is automatically added to the message's `sender` field.
+
         Args:
-            recipient_id (Any): receiver's address object. Typically, can be accessed via the recipient's directory
+            recipient_id (Any): recipient's ID string. Typically, it can be accessed via the recipient's directory
                 card (e.g. `state.directory.external[<agent_id>].address` if `agent_id` is known).
-            msg (dict[str, Any]): message's content. Must be JSON serializable.
+            msg (dict[str, Any]): message's content. Must be serializable (and deserializable) with `dill`.
             performative (str): message performative.
         """
         self.log(logging.DEBUG, f'Sending message to {recipient_id}.')
@@ -159,8 +192,25 @@ class RMQSenderBase(ActuatorBase):
 class RMQPerceptorBase(PerceptorBase):
     """
     Extended perceptor base class for interacting with RabbitMQ-based environments.
+
+    Call ``observe()`` from a behaviour hook to request data, then handle the response in ``on_observation()``.
+    Requests and responses are dictionaries defined by the environment. To forward a result internally, construct
+    an ``Observation`` and enqueue it with ``state.outbox.send_observation()`` before returning the state.
+    Responses are addressed to the agent's observation route. Multiple perceptors subscribed to that route receive
+    the same responses; include and echo application correlation fields when a response must be matched to a request.
     """
     def __init__(self, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta-env', **kwargs):
+        """Configure observation requests and their response subscription.
+
+        Args:
+            host (str, optional): RabbitMQ host reachable from the module process. Defaults to ``'localhost'``;
+                the orchestrator rewrites this hostname for external modules running in containers.
+            port (int, optional): RabbitMQ AMQP port. Defaults to 5672.
+            exchange_name (str, optional): External exchange shared with the environment. Defaults to
+                ``'mhagenta-env'``. Set this explicitly to match the environment's configured exchange.
+            **kwargs: ``ModuleBase`` constructor arguments, including required ``module_id`` and optional
+                ``initial_state``, ``init_kwargs``, and list-valued ``tags``. External communication tags are appended.
+        """
         super().__init__(**kwargs)
         # self._agent_id = agent_id
         self.tags.extend(['external', 'perceptor', 'rmq', 'env-perceptor'])
@@ -201,6 +251,17 @@ class RMQPerceptorBase(PerceptorBase):
         await self._connector.stop()
 
     def observe(self, env_id: str | None = None, **kwargs) -> None:
+        """Publish an observation request and return without waiting for its response.
+
+        Use after runtime initialization, when ``self.state`` and the external connector are available. The
+        environment's response is delivered later to ``on_observation()``. Selecting an ID chooses a routing key
+        on this perceptor's configured exchange; it does not switch brokers or exchanges using the directory card.
+
+        Args:
+            env_id (str, optional): Environment ID. When None, use the ``env_id`` in the first environment card's
+                address. That default requires a populated external directory with at least one environment.
+            **kwargs: Observation request fields passed to ``MHAEnvBase.on_observe`` as keyword arguments.
+        """
         env_id = self.state.directory.external.environment.address['env_id'] if env_id is None else env_id
         self.log(logging.DEBUG, f'Sending observation request to \"{env_id}\".')
         self._connector.send(
@@ -222,7 +283,8 @@ class RMQPerceptorBase(PerceptorBase):
         Args:
             state (PerceptorState): current perceptor state.
             env_id (str): environment id.
-            **kwargs:
+            **kwargs: Fields of the response dictionary returned by ``MHAEnvBase.on_observe``. Their names and
+                meaning are defined by the environment; no ``Observation`` object is constructed automatically.
 
         Returns:
             PerceptorState: updated perceptor state.
@@ -253,8 +315,25 @@ class RMQPerceptorBase(PerceptorBase):
 class RMQActuatorBase(ActuatorBase):
     """
     Extended actuator base class for interacting with RabbitMQ-based environments.
+
+    Call ``act()`` from a behaviour hook to request an action. ``on_status()`` is invoked only when the environment
+    returns a response dictionary. To report a result internally, wrap it in an ``ActionStatus`` and enqueue it
+    with ``state.outbox.send_status()`` before returning the state.
+    Responses are addressed to the agent's action-status route. Multiple actuators subscribed to that route receive
+    the same responses; include and echo application correlation fields when a response must be matched to a request.
     """
     def __init__(self, host: str = 'localhost', port: int = 5672, exchange_name: str = 'mhagenta-env', **kwargs):
+        """Configure action requests and their status subscription.
+
+        Args:
+            host (str, optional): RabbitMQ host reachable from the module process. Defaults to ``'localhost'``;
+                the orchestrator rewrites this hostname for external modules running in containers.
+            port (int, optional): RabbitMQ AMQP port. Defaults to 5672.
+            exchange_name (str, optional): External exchange shared with the environment. Defaults to
+                ``'mhagenta-env'``. Set this explicitly to match the environment's configured exchange.
+            **kwargs: ``ModuleBase`` constructor arguments, including required ``module_id`` and optional
+                ``initial_state``, ``init_kwargs``, and list-valued ``tags``. External communication tags are appended.
+        """
         super().__init__(**kwargs)
         # self._agent_id = agent_id
         self.tags.extend(['external', 'actuator', 'rmq', 'env-actuator'])
@@ -295,6 +374,18 @@ class RMQActuatorBase(ActuatorBase):
         await self._connector.stop()
 
     def act(self, env_id: str | None = None, **kwargs) -> None:
+        """Publish an action request and return without waiting for an action status.
+
+        Use after runtime initialization, when ``self.state`` and the external connector are available. A status
+        reaches ``on_status()`` only if ``MHAEnvBase.on_action`` returns a response dictionary. Returning state alone
+        or ``(state, None)`` sends no status; ``(state, {})`` does send one. Selecting an ID does not change the
+        connector's configured broker or exchange.
+
+        Args:
+            env_id (str, optional): Environment ID. When None, use the ``env_id`` in the first environment card's
+                address. That default requires a populated external directory with at least one environment.
+            **kwargs: Action request fields passed to ``MHAEnvBase.on_action`` as keyword arguments.
+        """
         env_id = self.state.directory.external.environment.address['env_id'] if env_id is None else env_id
         self.log(logging.DEBUG, f'Sending action request to \"{env_id}\".')
         self._connector.send(
@@ -316,7 +407,8 @@ class RMQActuatorBase(ActuatorBase):
         Args:
             state (ActuatorState): current actuator state.
             env_id (str): environment id.
-            **kwargs:
+            **kwargs: Fields of the response dictionary returned by ``MHAEnvBase.on_action``. Their names and
+                meaning are defined by the environment; no ``ActionStatus`` object is constructed automatically.
 
         Returns:
             ActuatorState: updated actuator state.

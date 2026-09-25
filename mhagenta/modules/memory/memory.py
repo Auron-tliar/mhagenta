@@ -6,7 +6,7 @@ from mhagenta.core.processes.mha_module import MHAModule, GlobalParams, ModuleBa
 
 
 class MemoryOutbox(Outbox):
-    """Internal communication outbox class for Memory structure.
+    """Internal communication outbox class for Memory module.
 
     Used to store and process outgoing messages to other modules.
 
@@ -30,19 +30,19 @@ MemoryState = State[MemoryOutbox]
 
 
 class MemoryBase(ModuleBase):
-    """Base class for defining Memory structure behavior (also inherits common methods from `ModuleBase`).
+    """Base class for defining Memory module behaviour (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behaviour, override the base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
     module_type: ClassVar[str] = ModuleTypes.MEMORY
 
     def on_memory_request(self, state: MemoryState, sender: str, **kwargs) -> MemoryState:
-        """Override to define memory structure's reaction to receiving a request for memories.
+        """Override to define the memory module's reaction to receiving a request for memories.
 
         Args:
-            state (MemoryState): Memory structure's internal state enriched with relevant runtime information and
+            state (MemoryState): Memory module's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the learner that sent the request.
             **kwargs: additional keyword arguments included in the message.
@@ -54,12 +54,12 @@ class MemoryBase(ModuleBase):
         return state
 
     def on_observation_update(self, state: MemoryState, sender: str, observations: Sequence[Observation], **kwargs) -> MemoryState:
-        """Override to define memory structure's reaction to receiving an update of evaluated observations.
+        """Override to define the memory module's reaction to receiving an update of evaluated observations.
 
         Args:
-            state (MemoryState): Memory structure's internal state enriched with relevant runtime information and
+            state (MemoryState): Memory module's internal state enriched with relevant runtime information and
                 functionality.
-            sender (str): `module_id` of the low-level reasoner that sent the update.
+            sender (str): `module_id` of the knowledge module that sent the update.
             observations (Sequence[Observation]): received collection of evaluated observations.
             **kwargs: additional keyword arguments included in the message.
 
@@ -70,13 +70,13 @@ class MemoryBase(ModuleBase):
         return state
 
     def on_belief_update(self, state: MemoryState, sender: str, beliefs: Sequence[Belief], **kwargs) -> MemoryState:
-        """Override to define memory structure's reaction to receiving an update of belief memories.
+        """Override to define the memory module's reaction to receiving an update of belief memories.
 
         Args:
-            state (MemoryState): Memory structure's internal state enriched with relevant runtime information and
+            state (MemoryState): Memory module's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the knowledge model that sent the update.
-            beliefs (Sequence[Belief]): received collection of beliefs.
+            beliefs (Sequence[Belief]): the received collection of beliefs.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:

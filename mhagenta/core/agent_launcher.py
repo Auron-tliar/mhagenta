@@ -1,3 +1,15 @@
+"""Container entry point for a serialized agent definition.
+
+The orchestrator installs this script as ``/agent/agent_launcher.py`` and writes a dill parameter dictionary to
+``/agent/agent_params``. ``scripts/start.sh`` starts the container's internal RabbitMQ broker before invoking it.
+``AGENT_ID`` optionally overrides the serialized agent ID (used for agent copies). ``DOCKER_NAME`` identifies
+launcher output and ``VERBOSE`` must be set; the string ``'true'`` enables the version banner. Output paths are
+provided in the parameter dictionary, normally with ``/out`` mounted to the host's entity output directory.
+
+This is a container launcher, not the entry point for a user experiment. Define agents through ``Orchestrator``
+and call ``run()`` or ``arun()`` from the experiment's own script.
+"""
+
 import os
 import dill
 import asyncio
@@ -14,6 +26,7 @@ from mhagenta.bases import *
 
 
 async def main():
+    """Load the container's agent parameters, apply its ID override, and await initialization and execution."""
     with open('/agent/agent_params', 'rb') as f:
         params: dict[str, Any] = dill.load(f)
 

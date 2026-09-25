@@ -29,16 +29,16 @@ PerceptorState = State[PerceptorOutbox]
 
 
 class PerceptorBase(ModuleBase):
-    """Base class for defining Perceptor behavior (also inherits common methods from `ModuleBase`).
+    """Base class for defining Perceptor behaviour (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behaviour, override the base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
     module_type: ClassVar[str] = ModuleTypes.PERCEPTOR
 
     def on_request(self, state: PerceptorState, sender: str, **kwargs) -> PerceptorState:
-        """Override to define perceptor's reaction to receiving an observation reqeust.
+        """Override to define perceptor's reaction to receiving an observation request.
 
         Args:
             state (PerceptorState): Perceptor's internal state enriched with relevant runtime information and

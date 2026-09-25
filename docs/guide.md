@@ -1,3 +1,5 @@
+<!-- Generated from README.md by scripts/build_docs.py; edit the README instead. -->
+
 # MHAgentA
 
 **MHAgentA** (Modular Hybrid Agent Architecture) is a Python framework for building
@@ -38,7 +40,7 @@ An agent can use any subset of the eight module roles, with multiple instances o
 each role. At least one module is needed. Modules communicate along the supported
 routes shown below.
 
-![MHAgentA module roles and communication routes](docs/images/MHAgentA_modules.png)
+![MHAgentA module roles and communication routes](images/MHAgentA_modules.png)
 
 | Role | Behaviour base in `mhagenta.bases` | Purpose |
 | --- | --- | --- |
@@ -372,7 +374,7 @@ explicitly given `None`. GPU execution requires a compatible Docker host.
 synchronous Docker operations before the container tasks start.
 
 To implement another internal transport, extend
-[`Connector`](mhagenta/core/connection/connector.py). Its docstrings describe
+[`Connector`](mhagenta/core/connection/connector.html). Its docstrings describe
 initialization, channel registration, synchronous send methods, callbacks, and
 serialization responsibilities. Select it through `connector_cls` and
 `connector_kwargs`; the supplied external RabbitMQ behaviour bases retain their

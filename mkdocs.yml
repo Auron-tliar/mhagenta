@@ -1,4 +1,8 @@
 site_name: mhagenta
+site_url: https://auron-tliar.github.io/mhagenta/
+repo_url: https://github.com/Auron-tliar/mhagenta
+remote_branch: gh-pages
+site_dir: build/site
 theme:
   name: material
 

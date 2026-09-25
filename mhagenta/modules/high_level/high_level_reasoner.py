@@ -88,22 +88,22 @@ HLState = State[HLOutbox]
 
 
 class HLReasonerBase(ModuleBase):
-    """Base class for defining High-level reasoner behavior (also inherits common methods from `ModuleBase`).
+    """Base class for defining High-level reasoner behaviour (also inherits common methods from `ModuleBase`).
 
-    To implement a custom behavior, override the empty base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
+    To implement a custom behaviour, override the base functions: `on_init`, `step`, `on_first`, `on_last`, and/or
     reactions to messages from other modules.
 
     """
     module_type: ClassVar[str] = ModuleTypes.HLREASONER
 
     def on_belief_update(self, state: HLState, sender: str, beliefs: Sequence[Belief], **kwargs) -> HLState:
-        """Override to define high-level reasoner's reaction to receiving a belief update.
+        """Override to define the high-level reasoner's reaction to receiving a belief update.
 
         Args:
             state (HLState): High-level reasoner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the Knowledge model that sent the update.
-            beliefs (Sequence[Belief]): received collection of beliefs.
+            beliefs (Sequence[Belief]): the received collection of beliefs.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -113,13 +113,13 @@ class HLReasonerBase(ModuleBase):
         return state
 
     def on_goal_update(self, state: HLState, sender: str, goals: Sequence[Goal], **kwargs) -> HLState:
-        """Override to define high-level reasoner's reaction to receiving a goal update.
+        """Override to define the high-level reasoner's reaction to receiving a goal update.
 
         Args:
             state: High-level reasoner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the goal graph that sent the update.
-            goals (Sequence[Goal]): received collection of goals.
+            goals (Sequence[Goal]): the received collection of goals.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
@@ -129,17 +129,17 @@ class HLReasonerBase(ModuleBase):
         return state
 
     def on_model(self, state: HLState, sender: str, model: Any, **kwargs) -> HLState:
-        """Override to define high-level reasoner's reaction to receiving a learned model.
+        """Override to define the high-level reasoner's reaction to receiving a learned model.
 
         Args:
             state (HLState): High-level reasoner's internal state enriched with relevant runtime information and
                 functionality.
             sender (str): `module_id` of the learner that sent the model.
-            model (Any): received learned model object.
+            model (Any): the received learned model object.
             **kwargs: additional keyword arguments included in the message.
 
         Returns:
-            LLState: modified or unaltered internal state of the module.
+            HLState: modified or unaltered internal state of the module.
 
         """
         return state
