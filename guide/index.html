@@ -1,0 +1,999 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://auron-tliar.github.io/mhagenta/guide/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Guide - mhagenta</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#mhagenta" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="mhagenta" class="md-header__button md-logo" aria-label="mhagenta" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            mhagenta
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Auron-tliar/mhagenta" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="mhagenta" class="md-nav__button md-logo" aria-label="mhagenta" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    mhagenta
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Auron-tliar/mhagenta" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation-and-prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation and prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-minimal-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A minimal agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behaviour-hooks-and-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behaviour hooks and state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#internal-messages-and-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal messages and directories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rabbitmq-environments-and-external-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RabbitMQ environments and external messages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing-shutdown-and-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing, shutdown, and persistence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#packaging-and-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packaging and images
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#async-use-and-extension-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async use and extension points
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-the-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building the documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation-and-prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation and prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-minimal-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A minimal agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behaviour-hooks-and-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behaviour hooks and state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#internal-messages-and-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal messages and directories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rabbitmq-environments-and-external-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RabbitMQ environments and external messages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing-shutdown-and-persistence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing, shutdown, and persistence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#packaging-and-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Packaging and images
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#async-use-and-extension-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async use and extension points
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building-the-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building the documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<!-- Generated from README.md by scripts/build_docs.py; edit the README instead. -->
+
+<h1 id="mhagenta">MHAgentA</h1>
+<p><strong>MHAgentA</strong> (Modular Hybrid Agent Architecture) is a Python framework for building
+containerized agents from cooperating modules. You define each module's behaviour;
+the framework provides state, scheduling, message routing, process lifecycle, and
+Docker orchestration. Each module runs in its own process within its agent's
+container.</p>
+<h2 id="installation-and-prerequisites">Installation and prerequisites</h2>
+<p>Use Python 3.12 or a later version permitted by the project's <code>^3.12</code> requirement.
+Running experiments requires Docker with Linux container support and an accessible
+Docker daemon. <code>Orchestrator</code> creates a Docker client during construction. The host
+Python installation must also include Tkinter, which is imported with the
+orchestrator.</p>
+<p>Install the released package into your Python environment:</p>
+<pre><code class="language-shell">python -m pip install mhagenta
+</code></pre>
+<p>For development from this checkout, use the existing Poetry dependencies:</p>
+<pre><code class="language-shell">poetry install --with dev
+poetry check --lock
+poetry run python -c &quot;import mhagenta; print(mhagenta.__version__)&quot;
+</code></pre>
+<p>Install the project before importing it: <code>mhagenta.__version__</code> comes from installed
+distribution metadata. Installing the checkout on the host does not automatically
+install that checkout inside agent images; see <a href="#packaging-and-images">Packaging and images</a>.</p>
+<h2 id="agent-structure">Agent structure</h2>
+<p>An agent can use any subset of the eight module roles, with multiple instances of
+each role. At least one module is needed. Modules communicate along the supported
+routes shown below.</p>
+<p><img alt="MHAgentA module roles and communication routes" src="../images/MHAgentA_modules.png" /></p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Behaviour base in <code>mhagenta.bases</code></th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Low-level reasoner</td>
+<td><code>LLReasonerBase</code></td>
+<td>Fast decisions and reactions to observations and action results</td>
+</tr>
+<tr>
+<td>Perceptor</td>
+<td><code>PerceptorBase</code></td>
+<td>Obtain observations and send them to low-level reasoners</td>
+</tr>
+<tr>
+<td>Actuator</td>
+<td><code>ActuatorBase</code></td>
+<td>Execute requests from reasoners and report results to low-level reasoners</td>
+</tr>
+<tr>
+<td>Knowledge model</td>
+<td><code>KnowledgeBase</code></td>
+<td>Process beliefs and connect reasoning with stored knowledge</td>
+</tr>
+<tr>
+<td>High-level reasoner</td>
+<td><code>HLReasonerBase</code></td>
+<td>Plan, reason about beliefs and goals, and request actions</td>
+</tr>
+<tr>
+<td>Goal graph</td>
+<td><code>GoalGraphBase</code></td>
+<td>Coordinate goal updates between reasoning layers</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td><code>MemoryBase</code></td>
+<td>Store observations and beliefs and supply memories to learners</td>
+</tr>
+<tr>
+<td>Learner</td>
+<td><code>LearnerBase</code></td>
+<td>Process learning tasks and provide models to reasoners</td>
+</tr>
+</tbody>
+</table>
+<p>Some bases have useful default behaviour. <code>KnowledgeBase.on_observed_beliefs()</code>
+forwards beliefs to all high-level reasoners. <code>GoalGraphBase.on_goal_update()</code>
+forwards updates from one reasoning layer to all reasoners in the other layer.
+Other message hooks normally return their state unchanged; inspect the relevant
+base before overriding it.</p>
+<h2 id="a-minimal-agent">A minimal agent</h2>
+<p>Save this as <code>example.py</code>. It runs one periodic reasoner, counts three steps, and
+requests an early stop. It uses the internal broker supplied by the agent image;
+no separate external RabbitMQ server is needed for this example.</p>
+<pre><code class="language-python">from mhagenta import Orchestrator
+from mhagenta.bases import LLReasonerBase
+from mhagenta.states import LLState
+
+
+class Counter(LLReasonerBase):
+    def on_init(self, limit: int) -&gt; None:
+        self.limit = limit
+
+    def step(self, state: LLState) -&gt; LLState:
+        state.count += 1
+        self.log(Orchestrator.INFO, f&quot;Count: {state.count}&quot;)
+        if state.count &gt;= self.limit:
+            state.outbox.terminate_agent(&quot;Counter completed&quot;)
+        return state
+
+
+def main() -&gt; None:
+    orchestrator = Orchestrator(
+        save_dir=&quot;runs/counter&quot;,
+        step_frequency=1.0,
+        agent_start_delay=5.0,
+        exec_duration=30.0,
+    )
+    orchestrator.add_agent(
+        agent_id=&quot;demo&quot;,
+        perceptors=[],
+        actuators=[],
+        ll_reasoners=Counter(
+            module_id=&quot;counter&quot;,
+            initial_state={&quot;count&quot;: 0},
+            init_kwargs={&quot;limit&quot;: 3},
+        ),
+    )
+    orchestrator.run()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+<p>Run it with <code>python example.py</code>, or <code>poetry run python example.py</code> when using the
+checkout. Use a fresh output directory for the first run. The final module snapshot
+is written to <code>runs/counter/demo/out/demo.counter.json</code>, and the container log is
+saved as <code>runs/counter/demo.log</code>.</p>
+<p><code>add_agent()</code> requires <code>perceptors</code>, <code>actuators</code>, and <code>ll_reasoners</code> even when a role
+is unused: pass an empty list for that role. The other role arguments default to
+<code>None</code>. Each role accepts a single behaviour instance or a collection; use lists
+or tuples for collections. Module IDs must be unique across all roles within an
+agent. Agent IDs must be unique within an orchestrator.</p>
+<h2 id="behaviour-hooks-and-state">Behaviour hooks and state</h2>
+<p>All behaviour hooks are synchronous. Keep them short and non-blocking so the
+module can process scheduled work and messages. Use the role-specific aliases from
+<code>mhagenta.states</code>, such as <code>LLState</code>, <code>PerceptorState</code>, and <code>ActuatorState</code>, to get
+the appropriate outbox type hints.</p>
+<table>
+<thead>
+<tr>
+<th>Hook</th>
+<th>When it runs</th>
+<th>Return value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>on_init(**kwargs)</code></td>
+<td>After runtime attachment and any saved-state loading, before execution is scheduled</td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>on_first(state)</code></td>
+<td>At execution start, before the first periodic step</td>
+<td>Updated or unchanged state</td>
+</tr>
+<tr>
+<td><code>step(state)</code></td>
+<td>Periodically, if overridden</td>
+<td>Updated or unchanged state</td>
+</tr>
+<tr>
+<td><code>on_&lt;message_type&gt;(state, sender, ...)</code></td>
+<td>When the runtime processes an incoming message</td>
+<td>Updated or unchanged state</td>
+</tr>
+<tr>
+<td><code>on_last(state)</code></td>
+<td>During shutdown, before the final save and communication teardown</td>
+<td>Updated or unchanged state</td>
+</tr>
+</tbody>
+</table>
+<p>Leaving <code>step()</code> unmodified makes a module reactive: it still receives lifecycle
+hooks and messages but has no periodic step action. Pass setup arguments in the
+constructor's <code>init_kwargs</code> dictionary. <code>self.state</code>, <code>self.agent_id</code>, and
+<code>self.log()</code> are available from <code>on_init()</code> onward, after the runtime attaches the
+behaviour. In the behaviour object's constructor, the agent ID is still <code>None</code>
+and runtime state and logging are not yet attached.</p>
+<p>Declare persistent fields in <code>initial_state</code>. For example, <code>{"count": 0}</code> registers
+<code>state.count</code>, also accessible as <code>state["count"]</code>. Updating an existing field
+preserves its registration. Assigning a new attribute or bracket key does <strong>not</strong>
+register it for saving or bracket lookup; use <code>state.load(new_field=value)</code> to add
+registered fields later. Avoid names belonging to the state's runtime properties,
+methods, or private attributes.</p>
+<p>The runtime also exposes:</p>
+<ul>
+<li><code>state.agent_id</code> and <code>state.module_id</code> for identity.</li>
+<li><code>state.time</code> for seconds since the scheduled execution start. It can be <code>None</code>
+  before scheduling or negative before that start time.</li>
+<li><code>state.directory.internal</code> for module cards grouped by role, ID, or tags.</li>
+<li><code>state.directory.external</code> for configured agents and environments.</li>
+<li><code>state.outbox</code> for queued internal messages and termination requests.</li>
+</ul>
+<h2 id="internal-messages-and-directories">Internal messages and directories</h2>
+<p>Outbox methods enqueue messages. After a hook returns its state, the runtime sends
+them through the registered routes and clears the queue. Request methods do not
+wait for replies; replies arrive through later message callbacks.</p>
+<p>For example, a low-level reasoner can forward beliefs extracted from an
+observation to every knowledge module in its agent:</p>
+<pre><code class="language-python">from mhagenta import Belief, Observation
+from mhagenta.bases import LLReasonerBase
+from mhagenta.states import LLState
+
+
+class BeliefReasoner(LLReasonerBase):
+    def on_observation(
+        self, state: LLState, sender: str, observation: Observation, **kwargs
+    ) -&gt; LLState:
+        beliefs = [Belief(predicate=&quot;observed&quot;, arguments=(observation.content,))]
+        for knowledge in state.directory.internal.knowledge:
+            state.outbox.send_beliefs(
+                knowledge_id=knowledge.module_id,
+                observation=observation,
+                beliefs=beliefs,
+            )
+        return state
+</code></pre>
+<p>This callback requires a topology with a perceptor sending observations and
+knowledge modules receiving beliefs. Other common pairs include
+<code>request_observation()</code> / <code>PerceptorBase.on_request()</code>,
+<code>request_action()</code> / <code>ActuatorBase.on_request()</code>, and
+<code>send_status()</code> / <code>LLReasonerBase.on_action_status()</code>.</p>
+<p>Directory lookups return cards. Internal cards expose <code>module_id</code>, <code>module_type</code>,
+and <code>tags</code>; external cards expose <code>agent_id</code> (also used for environment IDs), <code>id</code>,
+<code>address</code>, and <code>tags</code>. String keys select exact IDs and integer keys select by
+registration order. <code>search(["tag_a", "tag_b"])</code> selects cards containing <strong>both</strong>
+tags; pass a reusable collection of tags. Empty tag collections match all entries.</p>
+<p>The external directory is populated when <code>mas_rmq_uri</code> is configured. Its RabbitMQ
+addresses contain <code>host</code>, <code>port</code>, <code>exchange_name</code>, and <code>agent_id</code> or <code>env_id</code>.
+<code>.environments</code> returns all environment cards; <code>.environment</code> returns the first,
+or <code>None</code>. Select an environment by ID or tags when more than one is registered.
+These entries describe configured entities, not live service discovery.</p>
+<h2 id="rabbitmq-environments-and-external-messages">RabbitMQ environments and external messages</h2>
+<p>An environment behaviour extends <code>MHAEnvBase</code> and uses a plain state dictionary.
+Its <code>init_state</code> argument is required; pass <code>None</code> for an empty dictionary.
+<code>Orchestrator.add_environment()</code> wraps that behaviour in an <code>RMQEnvironment</code>.</p>
+<pre><code class="language-python">from mhagenta import Orchestrator
+from mhagenta.environment import MHAEnvBase
+
+
+class CounterWorld(MHAEnvBase):
+    def on_observe(self, state, sender_id, **kwargs):
+        return state, {&quot;value&quot;: state[&quot;value&quot;]}
+
+    def on_action(self, state, sender_id, **kwargs):
+        state[&quot;value&quot;] += kwargs.get(&quot;increment&quot;, 1)
+        return state, {&quot;value&quot;: state[&quot;value&quot;]}
+
+
+def configure_world() -&gt; Orchestrator:
+    orchestrator = Orchestrator(
+        save_dir=&quot;runs/world&quot;,
+        mas_rmq_uri=&quot;default&quot;,
+        mas_rmq_exchange_name=&quot;world-exchange&quot;,
+        stop_on_agents_term=True,
+    )
+    orchestrator.add_environment(
+        base=CounterWorld(init_state={&quot;value&quot;: 0}),
+        env_id=&quot;world&quot;,
+        host=&quot;localhost&quot;,
+        port=5672,
+        exchange_name=&quot;world-exchange&quot;,
+    )
+    return orchestrator
+</code></pre>
+<p>This registers the environment; add agents before running the returned
+orchestrator. Agents interact with it through subclasses of <code>RMQPerceptorBase</code>
+and <code>RMQActuatorBase</code>, available from <code>mhagenta.defaults.communication</code>. Configure
+both with <code>exchange_name="world-exchange"</code> and the same broker. Their constructors
+also take the usual <code>module_id</code>, <code>initial_state</code>, and <code>init_kwargs</code> arguments.
+Supply <code>tags</code> as a list when using these external communication bases.</p>
+<ul>
+<li>A perceptor calls <code>self.observe(env_id="world", ...)</code>. The request fields become
+  keyword arguments to <code>on_observe()</code>, which returns <code>(state, response_dict)</code>.
+  Response fields arrive in the perceptor's <code>on_observation(state, env_id, **kwargs)</code>.</li>
+<li>An actuator calls <code>self.act(env_id="world", ...)</code>. The request fields become
+  keyword arguments to <code>on_action()</code>. Returning <code>state</code> or <code>(state, None)</code> sends no
+  response. Returning <code>(state, response_dict)</code>, including <code>(state, {})</code>, invokes
+  the actuator's <code>on_status(state, env_id, **kwargs)</code> when the reply arrives.</li>
+<li>These external helpers publish through their connector immediately and return
+  without waiting. Their response hooks must return the module state. To forward
+  a result to a reasoner, construct an <code>Observation</code> or <code>ActionStatus</code> and use the
+  internal outbox.</li>
+</ul>
+<p>Omitting <code>env_id</code> selects the first external environment card and requires that
+card to exist. Selecting an ID does not change the helper's configured broker or
+exchange. Use explicit matching exchange names throughout: the environment and
+the perceptor/actuator defaults differ.</p>
+<p>Environment replies are routed by agent ID and response kind. Multiple perceptors
+or actuators subscribed to the same reply route receive those replies. Include and
+echo your own correlation fields when matching responses to individual requests.</p>
+<p>For communication between agents, use <code>RMQSenderBase.send(recipient_id, msg)</code> and
+override <code>RMQReceiverBase.on_message(state, sender, msg)</code> to return a state. The
+recipient is an <strong>agent ID string</strong>, not its address dictionary. Both endpoints
+must use the same broker and exchange. Sending adds a <code>sender</code> field to the supplied
+dictionary. RabbitMQ messages are serialized with <code>dill</code>, so both sides need the
+Python definitions used by their payloads.</p>
+<p><code>mas_rmq_uri="default"</code> uses a broker at <code>localhost:5672</code> and attempts to launch a
+RabbitMQ management container if a connection cannot be established. A custom
+address uses <code>host:port</code> syntax. The environment startup script also checks the
+broker's HTTP management endpoint at the configured AMQP port plus 10000,
+normally 15672. The orchestrator maps external <code>localhost</code> connections inside
+containers to the host gateway.</p>
+<h2 id="timing-shutdown-and-persistence">Timing, shutdown, and persistence</h2>
+<p>Parameters named <code>step_frequency</code> and <code>status_frequency</code> are <strong>intervals in
+seconds</strong>, not rates in hertz. The orchestrator defaults are 1 second for steps and
+5 seconds for status reports. <code>control_frequency</code> bounds the idle scheduling wait;
+its default of <code>-1</code> introduces no positive wait.</p>
+<p><code>agent_start_delay</code> defaults to 60 seconds from the start of <code>run()</code>/<code>arun()</code>.
+Execution waits for module readiness. Each agent can add a <code>start_delay</code> offset.
+When supplying a complete Unix <code>exec_start_time</code>, set <code>agent_start_delay=0</code> to avoid
+adding the global delay to that timestamp. <code>exec_duration</code> is the agent's execution
+time limit. Environment durations are adjusted by the orchestrator for startup
+timing and are not the same as a module's execution clock.</p>
+<p>To finish early, call <code>state.outbox.terminate_agent(reason)</code> in the hook that detects
+completion and return the state. The runtime processes the request even with an
+otherwise empty outbox, and the root coordinates shutdown. Use <code>on_last()</code> for
+final bookkeeping; it already runs during shutdown. <code>module_term_timeout</code> controls
+the grace period for each module process to exit. With <code>stop_on_agents_term=True</code>,
+the orchestrator requests environment shutdown once all agent containers exit.</p>
+<p>Module snapshots contain <code>state.dump()</code>: only registered custom fields. The
+directory, clock, and outbox are runtime information. Saving uses JSON by default;
+choose <code>save_format="dill"</code> for Python objects that the standard JSON serializer
+cannot encode. Save failures are logged as warnings.</p>
+<table>
+<thead>
+<tr>
+<th><code>state_autosave_interval</code></th>
+<th>Module saving behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-1</code> (default)</td>
+<td>Final save after <code>on_last()</code></td>
+</tr>
+<tr>
+<td><code>0</code></td>
+<td>Save each processed behavioural state update, plus the final save</td>
+</tr>
+<tr>
+<td>Positive number</td>
+<td>Periodic saves at that interval in seconds, plus the final save</td>
+</tr>
+</tbody>
+</table>
+<p>Module files are <code>&lt;save_dir&gt;/&lt;agent_id&gt;/out/&lt;agent_id&gt;.&lt;module_id&gt;.json</code> or <code>.sav</code>.
+Saving writes a temporary file, preserves the previous primary as <code>.backup</code>, and
+replaces the primary. <code>resume=True</code> loads saved custom fields before <code>on_init()</code>;
+it tries the backup if the primary cannot be loaded. Loading merges fields, so new
+initial fields absent from the snapshot remain. If neither snapshot can be loaded,
+module construction fails.</p>
+<p>Environment state is saved separately as <code>&lt;save_dir&gt;/&lt;env_id&gt;/out/&lt;env_id&gt;.json</code>
+or <code>.sav</code> on shutdown. The environment runtime does not provide the module
+backup/resume mechanism. With <code>num_copies &gt; 1</code>, agent IDs and output directories use
+suffixes <code>_0</code>, <code>_1</code>, and so on.</p>
+<p>State loading and image/output reuse are separate concerns. An existing image
+retains its serialized configuration, including <code>resume</code>. Rebuilding with
+<code>force_run=True</code> can delete an existing entity output directory and its snapshots,
+even when no old container exists. Preserve snapshots needed for resuming before
+using that option.</p>
+<h2 id="packaging-and-images">Packaging and images</h2>
+<p>Use the <code>add_agent()</code> and <code>add_environment()</code> packaging options for dependencies:</p>
+<ul>
+<li><code>requirements_path</code>: a requirements file installed with <code>pip install -r</code> inside
+  the image.</li>
+<li><code>init_script</code>: a shell script executed with <code>sh</code> during image building, before
+  the requirements file is installed. Use it for system dependencies.</li>
+<li><code>extra_runtime_sources</code>: local standalone <code>.py</code> files or importable package
+  directories containing <code>__init__.py</code>. Pass a package directory instead of its
+  <code>__init__.py</code> or a nested module file. Sources are copied beneath <code>/agent</code> and
+  must not conflict with launcher files or automatically copied behaviour sources.</li>
+</ul>
+<p>The builder copies local source associated with behaviour classes. Additional
+local packages used by those classes may still need <code>extra_runtime_sources</code>;
+third-party dependencies belong in <code>requirements_path</code>. Files placed only in the
+host environment are not automatically installed in a container.</p>
+<p><code>run()</code> and <code>arun()</code> rebuild agent and environment images by default. Setting
+<code>rebuild_agents=False</code> or <code>rebuild_envs=False</code> requires existing images and reuses
+their embedded configuration and sources. Rebuild after changing those inputs.
+<code>keep_containers=True</code> retains stopped agent/environment containers after normal
+completion; host-mounted output files are separate from container retention.</p>
+<p><code>mhagenta_version</code> selects the <strong>base image tag</strong>. <code>local_build</code> accepts the path to
+a framework checkout containing <code>mhagenta/</code>, <code>pyproject.toml</code>, and <code>README.md</code>.
+For development, use an unused base-image tag and <code>prerelease=False</code> with
+<code>local_build</code>: a cached matching base image can bypass the local build, and the
+prerelease installation branch takes precedence over local installation.</p>
+<p>The orchestrator and each entity also accept <code>gpu_device_ids</code>: <code>'none'</code>, <code>'all'</code>,
+<code>'any'</code>, or explicit device IDs. Agents inherit the orchestrator's setting when
+their value is <code>None</code>; environments default to <code>'none'</code> and inherit only when
+explicitly given <code>None</code>. GPU execution requires a compatible Docker host.</p>
+<h2 id="async-use-and-extension-points">Async use and extension points</h2>
+<p><code>orchestrator.run()</code> owns its event loop. From an existing event loop, use
+<code>await orchestrator.arun(...)</code> with the same options. Image preparation still uses
+synchronous Docker operations before the container tasks start.</p>
+<p>To implement another internal transport, extend
+<a href="../mhagenta/core/connection/connector.html"><code>Connector</code></a>. Its docstrings describe
+initialization, channel registration, synchronous send methods, callbacks, and
+serialization responsibilities. Select it through <code>connector_cls</code> and
+<code>connector_kwargs</code>; the supplied external RabbitMQ behaviour bases retain their
+own transport configuration.</p>
+<p>The scripts under <code>mhagenta/core/*_launcher.py</code>,
+<code>mhagenta/environment/environment_launcher.py</code>, and <code>mhagenta/scripts/</code> are
+framework entry points with container paths and generated parameter files. User
+experiments should launch through the orchestrator.</p>
+<h2 id="building-the-documentation">Building the documentation</h2>
+<p>The <a href="https://auron-tliar.github.io/mhagenta/">published API reference</a> is hosted
+from the <code>gh-pages</code> branch. Its pages are generated by pdoc and packaged by MkDocs.
+To regenerate them from this checkout, install the documentation dependency group
+and run the build script:</p>
+<pre><code class="language-shell">poetry install --with dev,docs
+poetry run python scripts/build_docs.py
+</code></pre>
+<p>The script updates the generated pages under <code>docs/</code> and builds the complete site
+in <code>build/site/</code>. Preview it with <code>poetry run mkdocs serve</code>. Regenerate after
+changing docstrings; MkDocs alone only packages the existing API HTML.</p>
+<p>After reviewing the build, publish with <code>poetry run mkdocs gh-deploy --strict</code>.
+This updates <code>gh-pages</code> without switching the current checkout to that branch.
+Commit source and generated-page changes separately on the development branch.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
